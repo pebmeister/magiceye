@@ -1,0 +1,41 @@
+cmake_minimum_required(VERSION 3.16)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include(FetchContent)
+
+# --- Fetch the pebmeister STL project ---
+FetchContent_Declare(
+    pebmeister_stl
+    GIT_REPOSITORY https://github.com/pebmeister/stl.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(pebmeister_stl)
+
+# --- Fetch GLM (header-only) ---
+FetchContent_Declare(
+    glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG 0.9.9.8 # You can update to a newer tag if needed
+)
+FetchContent_MakeAvailable(glm)
+
+# --- Create a library target from the STL source ---
+add_library(stl_lib
+    ${pebmeister_stl_SOURCE_DIR}/stl.cpp
+)
+target_include_directories(stl_lib PUBLIC
+    ${pebmeister_stl_SOURCE_DIR}
+)
+
+# --- Now create your main executable ---
+add_executable(magic_eye
+    stl_to_sirds_full.cpp
+    stb_image.h
+    stb_image_write.h
+)
+
+# --- Link the STL library and GLM into magic_eye ---
+target_link_libraries(magic_eye PRIVATE stl_lib glm::glm)
+
