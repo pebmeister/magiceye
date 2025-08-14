@@ -1,6 +1,4 @@
-// stl_to_sirds_unionfind.cpp
-// Single-file: requires stb_image.h and stb_image_write.h in the same dir.
-// Compile: g++ -std=c++20 -O2 stl_to_sirds_unionfind.cpp -o stl_to_sirds_unionfind
+// written by Paul Baxter
 
 #include <cmath>
 #include <cstdint>
@@ -37,6 +35,10 @@ struct Camera {
 
 // compute camera basis: right, up_cam, forward
 void computeCameraBasis(const Camera &cam, glm::vec3 &right, glm::vec3 &up_cam, glm::vec3 &forward) {
+
+    right = glm::normalize(glm::cross(forward, cam.up));
+    up_cam = glm::normalize(glm::cross(right, forward));
+
     forward = glm::normalize(cam.look_at - cam.position); // forward points toward scene
     right = glm::normalize(glm::cross(forward, cam.up));
     up_cam = glm::cross(right, forward);
@@ -80,10 +82,11 @@ bool barycentric2D(float px, float py,
 // We'll transform world vertices into camera space, project to NDC, then map to pixel coords.
 // For orthographic, user-defined ortho_scale controls how many camera units map to NDC range.
 std::vector<float> generate_depth_map(const stl &mesh,
-                                    int width, int height,
-                                    const Camera &cam,
-                                    float ortho_scale /*only for ortho; NDC scale multiplier*/,
-                                    float &out_zmin, float &out_zmax)
+    int width, int height,
+    const Camera &cam,
+    float ortho_scale,
+    float &out_zmin, float &out_zmax,
+    float depth_near, float depth_far)
 {
     // initialize z-buffer to +inf (we will store minimal zcam = distance along forward)
     constexpr float INF = std::numeric_limits<float>::infinity();
@@ -114,8 +117,11 @@ std::vector<float> generate_depth_map(const stl &mesh,
             // For orthographic we scale NDC by ortho_scale; do that by temporarily scaling p_cam.x/y
             glm::vec3 p_for_ndc = p_cam;
             if (!cam.perspective) {
-                p_for_ndc.x = p_cam.x / ortho_scale;
-                p_for_ndc.y = p_cam.y / ortho_scale;
+
+                if (!cam.perspective) {
+                    p_for_ndc.x = p_cam.x / (ortho_scale * aspect);
+                    p_for_ndc.y = p_cam.y / ortho_scale;
+                }
                 p_for_ndc.z = p_cam.z;
             }
             validProj[i] = projectToNDC(p_for_ndc, aspect, cam, ndc_x[i], ndc_y[i], zcam[i]);
@@ -152,7 +158,7 @@ std::vector<float> generate_depth_map(const stl &mesh,
                 if (!barycentric2D((float)x + 0.5f, (float)y + 0.5f,
                                 px[0], py[0], px[1], py[1], px[2], py[2],
                                 u, v, w)) continue;
-                if (u < -1e-4f || v < -1e-4f || w < -1e-4f) continue;
+                if (u < 0 || v < 0 || w < 0) continue;
                 // interpolate zcam (camera-space forward distance)
                 // If a vertex was not projectable (behind), we still have zcam from projectToNDC for others; barycentric should still work.
                 float z_interp = u * zcam[0] + v * zcam[1] + w * zcam[2];
@@ -176,7 +182,8 @@ std::vector<float> generate_depth_map(const stl &mesh,
             out_zmax = std::max(out_zmax, z);
         }
     }
-    // produce normalized depth map 0..1 where 1 = nearest
+
+    //  produce normalized depth map 0..1 where 1 = nearest
     std::vector<float> depth(width * height, 0.0f);
     if (!std::isfinite(out_zmin) || !std::isfinite(out_zmax)) {
         // nothing visible; return zeros
@@ -186,11 +193,11 @@ std::vector<float> generate_depth_map(const stl &mesh,
     if (range < 1e-6f) range = 1.0f;
     for (int i = 0; i < width * height; ++i) {
         float z = zbuffer[i];
-        if (!std::isfinite(z)) depth[i] = 0.0f;
+        if (!std::isfinite(z)) depth[i] = depth_far;
         else {
-            // map: z = out_zmin (closest) -> 1.0 ; z = out_zmax (farthest) -> 0.0
             float t = (z - out_zmin) / range;
-            depth[i] = 1.0f - t;
+            // Map: z = out_zmin (closest) -> depth_near ; z = out_zmax (farthest) -> depth_far
+            depth[i] = depth_near + (depth_far - depth_near) * t;
         }
     }
     return depth;
@@ -343,6 +350,14 @@ bool load_texture_rgb(const std::string &path, std::vector<uint8_t> &out, int &w
     return true;
 }
 
+float parse_float(const std::string& str)
+{
+    float out;
+    std::stringstream ss(str);
+    ss >> out;
+    return out;
+}
+
 glm::vec3 parse_vec3(const std::string& str)
 {
     std::stringstream ss(str);
@@ -438,7 +453,9 @@ int main(int argc, char** argv)
         std::cerr << "  -rot x,y,z       : Rotate model (degrees, XYZ order)\n";
         std::cerr << "  -trans x,y,z     : Translate model\n";
         std::cerr << "  -sc x,y,z        : Scale model\n";
+        std::cerr << "  -orthsc          : Orthographic scale\n";
         std::cerr << "  -shear x,y,z     : Shear model (XY,XZ,YZ)\n";
+        std::cerr << "  -depthrange near far : Set normalized depth range (default: 1.0 0.0)\n";
         return 1;
     }
 
@@ -449,7 +466,7 @@ int main(int argc, char** argv)
     // Default parameters
     int width = 1200, height = 800;
     int eye_sep = 64;
-    float fov = 45.0f;
+    float fov = 45.0f;  
     int perspective_flag = 1;
     glm::vec3 custom_cam_pos = { 0,0,0 };
     glm::vec3 custom_look_at = { 0,0,0 };
@@ -457,8 +474,15 @@ int main(int argc, char** argv)
     glm::vec3 trans = { 0, 0, 0 };
     glm::vec3 sc = { 1, 1, 1 };
     glm::vec3 shear = {0, 0, 0}; // shear.x = XY, shear.y = XZ, shear.z = YZ
+    float custom_orth_scale = 1;
     bool custom_cam_provided = false;
     bool custom_lookat_provided = false;
+    bool custom_orth_scale_provided = false;
+    float depth_near = 1.0f; // default: closest = 1.0
+    float depth_far = 0.0f;  // default: farthest = 0.0
+    float custom_depth_near = 1.0f; // default: closest = 1.0
+    float custom_depth_far = 0.0f;  // default: farthest = 0.0
+    bool custom_depth_range = false;
 
     // Parse named options
     for (int i = 4; i < argc; ++i) {
@@ -485,9 +509,20 @@ int main(int argc, char** argv)
             trans = parse_vec3(argv[++i]);
         } else if (arg == "-sc" && i + 1 < argc) {
             sc = parse_vec3(argv[++i]);
-        } else if (arg == "-shear" && i + 1 < argc) {
+        }
+        else if (arg == "-shear" && i + 1 < argc) {
             shear = parse_vec3(argv[++i]);
-        } else {
+        }
+        else if (arg == "-orthsc" && i + 1 < argc) {
+            custom_orth_scale = parse_float(argv[++i]);
+            custom_orth_scale_provided = true;
+        }
+        else if (arg == "-depthrange" && i + 2 < argc) {
+            custom_depth_near = parse_float(argv[++i]);
+            custom_depth_far = parse_float(argv[++i]);
+            custom_depth_range = true;
+        }
+        else {
             std::cerr << "Unknown or incomplete option: " << arg << "\n";
             return 1;
         }
@@ -514,13 +549,25 @@ int main(int argc, char** argv)
     translate((float*)vdata, vcount, trans.x, trans.y, trans.z);
     min_max(vdata, vcount, minx, maxx, miny, maxy, minz, maxz);
 
+    if (custom_depth_range) {
+        depth_near = std::clamp(custom_depth_near, 0.0f, 1.0f);
+        depth_far = std::clamp(custom_depth_far, 0.0f, 1.0f);
+        if (depth_near < depth_far) {
+            std::swap(depth_near, depth_far);
+            std::cerr << "Note: Swapped depthrange to enforce near >= far\n";
+        }
+    } else {
+        depth_near = std::clamp(depth_near, 0.0f, 1.0f);
+        depth_far = std::clamp(depth_far, 0.0f, 1.0f);
+    }
+
     glm::vec3 center = { (minx + maxx) * 0.5f, (miny + maxy) * 0.5f, (minz + maxz) * 0.5f };
     float spanx = maxx - minx; float spany = maxy - miny; float spanz = maxz - minz;
     float span = std::max({ spanx, spany, spanz, 1e-6f });
 
     // Setup camera
     Camera cam;
-    cam.up = { 0,-1,0 };
+    cam.up = { 0,1,0 };
     cam.perspective = (perspective_flag != 0);
     cam.fov_deg = fov;
 
@@ -541,7 +588,17 @@ int main(int argc, char** argv)
     }
 
     // For orthographic camera
-    float ortho_scale = std::max(spanx, spany) * 1.2f;
+    float ortho_scale;
+    if (custom_orth_scale_provided) {
+        ortho_scale = custom_orth_scale;
+    }
+    else {
+
+        float aspect = float(width) / height;
+        float half_spanx = spanx / 2;
+        float half_spany = spany / 2;
+        ortho_scale = std::max(half_spanx / aspect, half_spany) * 1.2f;
+    }
 
     std::cout << "Camera settings:\n";
     std::cout << "  Position: (" << cam.position.x << ", " << cam.position.y << ", " << cam.position.z << ")\n";
@@ -554,7 +611,7 @@ int main(int argc, char** argv)
 
     // Generate depth map
     float zmin, zmax;
-    auto depth = generate_depth_map(mesh, width, height, cam, ortho_scale, zmin, zmax);
+    auto depth = generate_depth_map(mesh, width, height, cam, ortho_scale, zmin, zmax, depth_near, depth_far);
     std::cout << "Depth zmin=" << zmin << " zmax=" << zmax << "\n";
 
     // Save depth visualization image
@@ -571,12 +628,12 @@ int main(int argc, char** argv)
     std::vector<uint8_t> texture;
     int tw = 0, th = 0, tchan = 0;
     bool haveTex = false;
+
     if (texpath != "null") {
         if (load_texture_rgb(texpath, texture, tw, th, tchan)) {
             haveTex = true;
             std::cout << "Loaded texture " << texpath << " (" << tw << "x" << th << " ch=" << tchan << ")\n";
-        }
-        else {
+        } else {
             std::cout << "Failed to load texture '" << texpath << "'. Falling back to random dots.\n";
         }
     }
