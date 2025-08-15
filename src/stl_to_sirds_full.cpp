@@ -24,6 +24,14 @@
 // include your stl header (adjust path if necessary)
 #include "stl.h"
 
+// default values
+constexpr int defaultWidth = 1200;
+constexpr int defaultHeight = 800;
+constexpr float defaultFov = 45.0;
+constexpr int defaultEyeSep = 256;
+
+constexpr float tolerance = 1e-6f;
+
 // ---------- Camera ----------
 struct Camera {
     glm::vec3 position;
@@ -35,10 +43,6 @@ struct Camera {
 
 // compute camera basis: right, up_cam, forward
 void computeCameraBasis(const Camera &cam, glm::vec3 &right, glm::vec3 &up_cam, glm::vec3 &forward) {
-
-    right = glm::normalize(glm::cross(forward, cam.up));
-    up_cam = glm::normalize(glm::cross(right, forward));
-
     forward = glm::normalize(cam.look_at - cam.position); // forward points toward scene
     right = glm::normalize(glm::cross(forward, cam.up));
     up_cam = glm::cross(right, forward);
@@ -47,7 +51,7 @@ void computeCameraBasis(const Camera &cam, glm::vec3 &right, glm::vec3 &up_cam, 
 // project a camera-space point to NDC X,Y in [-1,1] (Z returned as camera-space z)
 bool projectToNDC(const glm::vec3 &p_cam, float aspect, const Camera &cam, float &ndc_x, float &ndc_y, float &zcam) {
     zcam = p_cam.z; // positive = in front of camera (we require > 0)
-    if (zcam <= 1e-6f) return false; // behind or too close
+    if (zcam <= tolerance) return false; // behind or too close
 
     if (cam.perspective) {
         // x_ndc = (x_cam / (z_cam * tan(fov/2))) / aspect? We'll scale with aspect so image doesn't distort
@@ -71,7 +75,7 @@ bool barycentric2D(float px, float py,
                 float &u, float &v, float &w)
 {
     float denom = (by - cy)*(ax - cx) + (cx - bx)*(ay - cy);
-    if (fabs(denom) < 1e-9f) return false;
+    if (fabs(denom) < tolerance) return false;
     u = ((by - cy)*(px - cx) + (cx - bx)*(py - cy)) / denom;
     v = ((cy - ay)*(px - cx) + (ax - cx)*(py - cy)) / denom;
     w = 1.0f - u - v;
@@ -148,7 +152,7 @@ std::vector<float> generate_depth_map(const stl &mesh,
 
         // skip degenerate
         float denom = (py[1] - py[2])*(px[0] - px[2]) + (px[2] - px[1])*(py[0] - py[2]);
-        if (fabs(denom) < 1e-9f) continue;
+        if (fabs(denom) < tolerance) continue;
 
         // rasterize triangle
         for (int y = miny; y <= maxy; ++y) {
@@ -190,7 +194,7 @@ std::vector<float> generate_depth_map(const stl &mesh,
         return depth;
     }
     float range = out_zmax - out_zmin;
-    if (range < 1e-6f) range = 1.0f;
+    if (range < tolerance) range = 1.0f;
     for (int i = 0; i < width * height; ++i) {
         float z = zbuffer[i];
         if (!std::isfinite(z)) depth[i] = depth_far;
@@ -350,6 +354,7 @@ bool load_texture_rgb(const std::string &path, std::vector<uint8_t> &out, int &w
     return true;
 }
 
+// Parse a floating point number
 float parse_float(const std::string& str)
 {
     float out;
@@ -358,6 +363,7 @@ float parse_float(const std::string& str)
     return out;
 }
 
+// parse 3 floats
 glm::vec3 parse_vec3(const std::string& str)
 {
     std::stringstream ss(str);
@@ -369,7 +375,6 @@ glm::vec3 parse_vec3(const std::string& str)
     }
     return v;
 }
-
 
 void min_max(const float* array, uint32_t vcount,
     float& minx, float& maxx,
@@ -386,6 +391,7 @@ void min_max(const float* array, uint32_t vcount,
     }
 }
 
+// apply 3d rotation of array
 void rotate(float* array, uint32_t vcount, float xrot_deg, float yrot_deg, float zrot_deg)
 {
     glm::mat4 rx = glm::rotate(glm::mat4(1.0f), glm::radians(xrot_deg), glm::vec3(1,0,0));
@@ -402,6 +408,7 @@ void rotate(float* array, uint32_t vcount, float xrot_deg, float yrot_deg, float
     }
 }
 
+// translate array in 3d
 void translate(float* array, uint32_t vcount, float xoffset, float yoffset, float zoffset)
 {
     for (size_t i = 0; i < vcount; ++i) {
@@ -411,6 +418,8 @@ void translate(float* array, uint32_t vcount, float xoffset, float yoffset, floa
     }
 }
 
+
+// scale an array 3d
 void scale(float* array, uint32_t vcount, float xscale, float yscale, float zscale)
 {
     for (size_t i = 0; i < vcount; ++i) {
@@ -443,10 +452,10 @@ int main(int argc, char** argv)
     if (argc < 4) {
         std::cerr << "Usage: " << argv[0] << " input.stl texture.png/null outprefix [options]\n";
         std::cerr << "Options (can appear in any order):\n";
-        std::cerr << "  -w width         : Output width (default: 1200)\n";
-        std::cerr << "  -h height        : Output height (default: 800)\n";
-        std::cerr << "  -sep eye_sep     : Eye separation in pixels (default: 64)\n";
-        std::cerr << "  -fov fov_deg     : Field of view in degrees (default: 45)\n";
+        std::cerr << "  -w width         : Output width (default: " << defaultWidth << ")\n";
+        std::cerr << "  -h height        : Output height (default: " << defaultHeight << ")\n";
+        std::cerr << "  -sep eye_sep     : Eye separation in pixels (default: " << defaultEyeSep << ")\n";
+        std::cerr << "  -fov fov_deg     : Field of view in degrees (default: " << defaultFov << ")\n";
         std::cerr << "  -persp 0|1       : 1 for perspective, 0 for orthographic (default: 1)\n";
         std::cerr << "  -cam x,y,z       : Camera position (default: auto)\n";
         std::cerr << "  -look x,y,z      : Look-at point (default: auto)\n";
@@ -464,9 +473,9 @@ int main(int argc, char** argv)
     std::string outprefix = argv[3];
 
     // Default parameters
-    int width = 1200, height = 800;
-    int eye_sep = 64;
-    float fov = 45.0f;  
+    int width = defaultWidth, height = defaultHeight;
+    int eye_sep = defaultEyeSep;
+    float fov = defaultFov;
     int perspective_flag = 1;
     glm::vec3 custom_cam_pos = { 0,0,0 };
     glm::vec3 custom_look_at = { 0,0,0 };
@@ -563,7 +572,7 @@ int main(int argc, char** argv)
 
     glm::vec3 center = { (minx + maxx) * 0.5f, (miny + maxy) * 0.5f, (minz + maxz) * 0.5f };
     float spanx = maxx - minx; float spany = maxy - miny; float spanz = maxz - minz;
-    float span = std::max({ spanx, spany, spanz, 1e-6f });
+    float span = std::max({ spanx, spany, spanz, tolerance });
 
     // Setup camera
     Camera cam;
