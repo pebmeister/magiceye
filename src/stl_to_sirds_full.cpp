@@ -16,6 +16,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "vectorutils.h"
+
+using v = vectorutils;
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -28,7 +32,7 @@
 constexpr int defaultWidth = 1200;
 constexpr int defaultHeight = 800;
 constexpr float defaultFov = 45.0;
-constexpr int defaultEyeSep = 256;
+constexpr int defaultEyeSep = 100;
 
 constexpr float tolerance = 1e-6f;
 
@@ -279,6 +283,10 @@ static std::array<uint8_t, 3> sample_texture_bilinear(const std::vector<uint8_t>
     return color;
 }
 
+
+
+// ---------- Stereogram generator (union-find), with bilinear texture sampling ----------
+
 // ---------- Stereogram generator (union-find), with bilinear texture sampling ----------
 void generate_sirds_unionfind_color(const std::vector<float>& depth, int width, int height,
     int eye_separation,
@@ -299,7 +307,8 @@ void generate_sirds_unionfind_color(const std::vector<float>& depth, int width, 
             float d = depth[y * width + x]; // 0..1, 1=nearest
             // Map to separation (0..eye_separation) - CORRECTED to use 1-d
             int sep = static_cast<int>(std::round((1.0f - d) * eye_separation));
-            if (sep < 1) continue;  // Skip background/zero separation
+            // FIX: Ensure minimum separation of 1 pixel for closest points
+            if (sep < 1) sep = 1;  // <<--- THIS IS THE CRITICAL FIX
 
             int left = x - sep / 2;
             int right = left + sep;
@@ -335,13 +344,14 @@ void generate_sirds_unionfind_color(const std::vector<float>& depth, int width, 
         for (int x = 0; x < width; ++x) {
             int root = uf.find(x);
             const auto& color = rootColor[root];
-            int idx = (y * width + x) * 3;
+            size_t idx = (y * width + x) * 3;
             out_rgb[idx + 0] = color[0];
             out_rgb[idx + 1] = color[1];
             out_rgb[idx + 2] = color[2];
         }
     }
 }
+
 
 // ---------- Helper: load texture with stb (force 3 channels RGB) ----------
 bool load_texture_rgb(const std::string &path, std::vector<uint8_t> &out, int &w, int &h, int &channels) {
@@ -376,101 +386,60 @@ glm::vec3 parse_vec3(const std::string& str)
     return v;
 }
 
-void min_max(const float* array, uint32_t vcount,
-    float& minx, float& maxx,
-    float& miny, float& maxy,
-    float& minz, float& maxz)
+
+struct Options {
+    std::string stlpath = "";
+    std::string texpath = "";
+    std::string outprefix = "out";
+
+    int width = defaultWidth, height = defaultHeight;
+    int eye_sep = defaultEyeSep;
+    float fov = defaultFov;
+    int perspective_flag = 1;
+    glm::vec3 custom_cam_pos = { 0,0,0 };
+    glm::vec3 custom_look_at = { 0,0,0 };
+    glm::vec3 rot_deg = { 0, 0, 0 };
+    glm::vec3 trans = { 0, 0, 0 };
+    glm::vec3 sc = { 1, 1, 1 };
+    glm::vec3 shear = { 0, 0, 0 }; // shear.x = XY, shear.y = XZ, shear.z = YZ
+    float custom_orth_scale = 1;
+    bool custom_cam_provided = false;
+    bool custom_lookat_provided = false;
+    bool custom_orth_scale_provided = false;
+    float depth_near = 1.0f; // default: closest = 1.0
+    float depth_far = 0.0f;  // default: farthest = 0.0
+    float custom_depth_near = 1.0f; // default: closest = 1.0
+    float custom_depth_far = 0.0f;  // default: farthest = 0.0
+    bool custom_depth_range = false;
+};
+
+void printhelp()
 {
-    for (size_t i = 0; i < vcount; ++i) {
-        float x = array[i * 3 + 0];
-        float y = array[i * 3 + 1];
-        float z = array[i * 3 + 2];
-        minx = std::min(minx, x); maxx = std::max(maxx, x);
-        miny = std::min(miny, y); maxy = std::max(maxy, y);
-        minz = std::min(minz, z); maxz = std::max(maxz, z);
-    }
+    std::cerr << "Usage: " << "magic_eye" << " input.stl texture.png/null outprefix [options]\n";
+    std::cerr << "Options (can appear in any order):\n";
+    std::cerr << "  -w width         : Output width (default: " << defaultWidth << ")\n";
+    std::cerr << "  -h height        : Output height (default: " << defaultHeight << ")\n";
+    std::cerr << "  -sep eye_sep     : Eye separation in pixels (default: " << defaultEyeSep << ")\n";
+    std::cerr << "  -fov fov_deg     : Field of view in degrees (default: " << defaultFov << ")\n";
+    std::cerr << "  -persp 0|1       : 1 for perspective, 0 for orthographic (default: 1)\n";
+    std::cerr << "  -cam x,y,z       : Camera position (default: auto)\n";
+    std::cerr << "  -look x,y,z      : Look-at point (default: auto)\n";
+    std::cerr << "  -rot x,y,z       : Rotate model (degrees, XYZ order)\n";
+    std::cerr << "  -trans x,y,z     : Translate model\n";
+    std::cerr << "  -sc x,y,z        : Scale model\n";
+    std::cerr << "  -orthsc          : Orthographic scale\n";
+    std::cerr << "  -shear x,y,z     : Shear model (XY,XZ,YZ)\n";
+    std::cerr << "  -depthrange near far : Set normalized depth range (default: 1.0 0.0)\n";
+
 }
 
-// apply 3d rotation of array
-void rotate(float* array, uint32_t vcount, float xrot_deg, float yrot_deg, float zrot_deg)
-{
-    glm::mat4 rx = glm::rotate(glm::mat4(1.0f), glm::radians(xrot_deg), glm::vec3(1,0,0));
-    glm::mat4 ry = glm::rotate(glm::mat4(1.0f), glm::radians(yrot_deg), glm::vec3(0,1,0));
-    glm::mat4 rz = glm::rotate(glm::mat4(1.0f), glm::radians(zrot_deg), glm::vec3(0,0,1));
-    glm::mat4 rot = rz * ry * rx; // ZYX order
-
-    for (size_t i = 0; i < vcount; ++i) {
-        glm::vec4 v(array[i * 3 + 0], array[i * 3 + 1], array[i * 3 + 2], 1.0f);
-        v = rot * v;
-        array[i * 3 + 0] = v.x;
-        array[i * 3 + 1] = v.y;
-        array[i * 3 + 2] = v.z;
-    }
-}
-
-// translate array in 3d
-void translate(float* array, uint32_t vcount, float xoffset, float yoffset, float zoffset)
-{
-    for (size_t i = 0; i < vcount; ++i) {
-        array[i * 3 + 0] += xoffset;
-        array[i * 3 + 1] += yoffset;
-        array[i * 3 + 2] += zoffset;
-    }
-}
-
-
-// scale an array 3d
-void scale(float* array, uint32_t vcount, float xscale, float yscale, float zscale)
-{
-    for (size_t i = 0; i < vcount; ++i) {
-        array[i * 3 + 0] *= xscale;
-        array[i * 3 + 1] *= yscale;
-        array[i * 3 + 2] *= zscale;
-    }
-}
-
-void shear_mesh(float* array, uint32_t vcount, float sh_xy, float sh_xz, float sh_yz)
-{
-    // Shear matrix: [1 sh_xy sh_xz; 0 1 sh_yz; 0 0 1]
-    glm::mat4 shearMat(1.0f);
-    shearMat[1][0] = sh_xy; // y += sh_xy * x
-    shearMat[2][0] = sh_xz; // z += sh_xz * x
-    shearMat[2][1] = sh_yz; // z += sh_yz * y
-
-    for (size_t i = 0; i < vcount; ++i) {
-        glm::vec4 v(array[i * 3 + 0], array[i * 3 + 1], array[i * 3 + 2], 1.0f);
-        v = shearMat * v;
-        array[i * 3 + 0] = v.x;
-        array[i * 3 + 1] = v.y;
-        array[i * 3 + 2] = v.z;
-    }
-}
-
-// ---------- Main with enhanced camera control ----------
-int main(int argc, char** argv)
+bool parseArgs(int argc, char** argv, std::shared_ptr<Options>& options)
 {
     if (argc < 4) {
-        std::cerr << "Usage: " << argv[0] << " input.stl texture.png/null outprefix [options]\n";
-        std::cerr << "Options (can appear in any order):\n";
-        std::cerr << "  -w width         : Output width (default: " << defaultWidth << ")\n";
-        std::cerr << "  -h height        : Output height (default: " << defaultHeight << ")\n";
-        std::cerr << "  -sep eye_sep     : Eye separation in pixels (default: " << defaultEyeSep << ")\n";
-        std::cerr << "  -fov fov_deg     : Field of view in degrees (default: " << defaultFov << ")\n";
-        std::cerr << "  -persp 0|1       : 1 for perspective, 0 for orthographic (default: 1)\n";
-        std::cerr << "  -cam x,y,z       : Camera position (default: auto)\n";
-        std::cerr << "  -look x,y,z      : Look-at point (default: auto)\n";
-        std::cerr << "  -rot x,y,z       : Rotate model (degrees, XYZ order)\n";
-        std::cerr << "  -trans x,y,z     : Translate model\n";
-        std::cerr << "  -sc x,y,z        : Scale model\n";
-        std::cerr << "  -orthsc          : Orthographic scale\n";
-        std::cerr << "  -shear x,y,z     : Shear model (XY,XZ,YZ)\n";
-        std::cerr << "  -depthrange near far : Set normalized depth range (default: 1.0 0.0)\n";
-        return 1;
+        printhelp();
+        return false;
     }
-
-    std::string stlpath = argv[1];
-    std::string texpath = argv[2];
-    std::string outprefix = argv[3];
+    options->stlpath = argv[1];
 
     // Default parameters
     int width = defaultWidth, height = defaultHeight;
@@ -482,7 +451,7 @@ int main(int argc, char** argv)
     glm::vec3 rot_deg = { 0, 0, 0 };
     glm::vec3 trans = { 0, 0, 0 };
     glm::vec3 sc = { 1, 1, 1 };
-    glm::vec3 shear = {0, 0, 0}; // shear.x = XY, shear.y = XZ, shear.z = YZ
+    glm::vec3 shear = { 0, 0, 0 }; // shear.x = XY, shear.y = XZ, shear.z = YZ
     float custom_orth_scale = 1;
     bool custom_cam_provided = false;
     bool custom_lookat_provided = false;
@@ -492,55 +461,93 @@ int main(int argc, char** argv)
     float custom_depth_near = 1.0f; // default: closest = 1.0
     float custom_depth_far = 0.0f;  // default: farthest = 0.0
     bool custom_depth_range = false;
+    options->texpath = argv[2];
+    options->outprefix = argv[3];
+
+    // Default parameters
+    options->width = defaultWidth;
+    options->height = defaultHeight;
+    options->eye_sep = defaultEyeSep;
+    options->fov = defaultFov;
+    options->perspective_flag = 1;
+    options->custom_cam_pos = { 0,0,0 };
+    options->custom_look_at = { 0,0,0 };
+    options->rot_deg = { 0, 0, 0 };
+    options->trans = { 0, 0, 0 };
+    options->sc = { 1, 1, 1 };
+    options->shear = { 0, 0, 0 }; // shear.x = XY, shear.y = XZ, shear.z = YZ
+    options->custom_orth_scale = 1;
+    options->custom_cam_provided = false;
+    options->custom_lookat_provided = false;
+    options->custom_orth_scale_provided = false;
+    options->depth_near = 1.0f; // default: closest = 1.0
+    options->depth_far = 0.0f;  // default: farthest = 0.0
+    options->custom_depth_near = 1.0f; // default: closest = 1.0
+    options->custom_depth_far = 0.0f;  // default: farthest = 0.0
+    options->custom_depth_range = false;
 
     // Parse named options
     for (int i = 4; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "-w" && i + 1 < argc) {
-            width = std::atoi(argv[++i]);
-        } else if (arg == "-h" && i + 1 < argc) {
-            height = std::atoi(argv[++i]);
-        } else if (arg == "-sep" && i + 1 < argc) {
-            eye_sep = std::atoi(argv[++i]);
-        } else if (arg == "-fov" && i + 1 < argc) {
-            fov = (float)atof(argv[++i]);
-        } else if (arg == "-persp" && i + 1 < argc) {
-            perspective_flag = std::atoi(argv[++i]);
-        } else if (arg == "-cam" && i + 1 < argc) {
-            custom_cam_pos = parse_vec3(argv[++i]);
-            custom_cam_provided = true;
-        } else if (arg == "-look" && i + 1 < argc) {
-            custom_look_at = parse_vec3(argv[++i]);
-            custom_lookat_provided = true;
-        } else if (arg == "-rot" && i + 1 < argc) {
-            rot_deg = parse_vec3(argv[++i]);
-        } else if (arg == "-trans" && i + 1 < argc) {
-            trans = parse_vec3(argv[++i]);
-        } else if (arg == "-sc" && i + 1 < argc) {
-            sc = parse_vec3(argv[++i]);
+            options->width = std::atoi(argv[++i]);
+        }
+        else if (arg == "-h" && i + 1 < argc) {
+            options->height = std::atoi(argv[++i]);
+        }
+        else if (arg == "-sep" && i + 1 < argc) {
+            options->eye_sep = std::atoi(argv[++i]);
+        }
+        else if (arg == "-fov" && i + 1 < argc) {
+            options->fov = (float)atof(argv[++i]);
+        }
+        else if (arg == "-persp" && i + 1 < argc) {
+            options->perspective_flag = std::atoi(argv[++i]);
+        }
+        else if (arg == "-cam" && i + 1 < argc) {
+            options->custom_cam_pos = parse_vec3(argv[++i]);
+            options->custom_cam_provided = true;
+        }
+        else if (arg == "-look" && i + 1 < argc) {
+            options->custom_look_at = parse_vec3(argv[++i]);
+            options->custom_lookat_provided = true;
+        }
+        else if (arg == "-rot" && i + 1 < argc) {
+            options->rot_deg = parse_vec3(argv[++i]);
+        }
+        else if (arg == "-trans" && i + 1 < argc) {
+            options->trans = parse_vec3(argv[++i]);
+        }
+        else if (arg == "-sc" && i + 1 < argc) {
+            options->sc = parse_vec3(argv[++i]);
         }
         else if (arg == "-shear" && i + 1 < argc) {
-            shear = parse_vec3(argv[++i]);
+            options->shear = parse_vec3(argv[++i]);
         }
         else if (arg == "-orthsc" && i + 1 < argc) {
-            custom_orth_scale = parse_float(argv[++i]);
-            custom_orth_scale_provided = true;
+            options->custom_orth_scale = parse_float(argv[++i]);
+            options->custom_orth_scale_provided = true;
         }
         else if (arg == "-depthrange" && i + 2 < argc) {
-            custom_depth_near = parse_float(argv[++i]);
-            custom_depth_far = parse_float(argv[++i]);
-            custom_depth_range = true;
+            options->custom_depth_near = parse_float(argv[++i]);
+            options->custom_depth_far = parse_float(argv[++i]);
+            options->custom_depth_range = true;
         }
         else {
             std::cerr << "Unknown or incomplete option: " << arg << "\n";
-            return 1;
+            return false;
         }
     }
 
+    return true;
+}
+
+int create_stereogram(std::shared_ptr<Options> options)
+{
     // Load STL
     stl mesh;
-    if (mesh.read_stl(stlpath.c_str()) != 0) {
-        std::cerr << "Failed to read STL: " << stlpath << "\n";
+    if (mesh.read_stl(options->stlpath.c_str()) != 0) {
+        std::cerr << "Failed to read STL: " << options->stlpath << "\n";
         return 1;
     }
     std::cout << "Loaded triangles: " << mesh.m_num_triangles << "\n";
@@ -550,24 +557,25 @@ int main(int argc, char** argv)
     float maxx = -1e9f, maxy = -1e9f, maxz = -1e9f;
     const float* vdata = mesh.m_vectors.data();
     size_t vcount = mesh.m_num_triangles * 3;
-    
-    // Apply user transforms: scale, shear, rotate, translate
-    scale((float*)vdata, vcount, sc.x, sc.y, sc.z);
-    shear_mesh((float*)vdata, vcount, shear.x, shear.y, shear.z);
-    rotate((float*)vdata, vcount, rot_deg.x, rot_deg.y, rot_deg.z);
-    translate((float*)vdata, vcount, trans.x, trans.y, trans.z);
-    min_max(vdata, vcount, minx, maxx, miny, maxy, minz, maxz);
 
-    if (custom_depth_range) {
-        depth_near = std::clamp(custom_depth_near, 0.0f, 1.0f);
-        depth_far = std::clamp(custom_depth_far, 0.0f, 1.0f);
-        if (depth_near < depth_far) {
-            std::swap(depth_near, depth_far);
+    // Apply user transforms: scale, shear, rotate, translate
+    v::scale((float*)vdata, vcount, options->sc.x, options->sc.y, options->sc.z);
+    v::shear_mesh((float*)vdata, vcount, options->shear.x, options->shear.y, options->shear.z);
+    v::rotate((float*)vdata, vcount, options->rot_deg.x, options->rot_deg.y, options->rot_deg.z);
+    v::translate((float*)vdata, vcount, options->trans.x, options->trans.y, options->trans.z);
+    v::min_max(vdata, vcount, minx, maxx, miny, maxy, minz, maxz);
+
+    if (options->custom_depth_range) {
+        options->depth_near = std::clamp(options->custom_depth_near, 0.0f, 1.0f);
+        options->depth_far = std::clamp(options->custom_depth_far, 0.0f, 1.0f);
+        if (options->depth_near < options->depth_far) {
+            std::swap(options->depth_near, options->depth_far);
             std::cerr << "Note: Swapped depthrange to enforce near >= far\n";
         }
-    } else {
-        depth_near = std::clamp(depth_near, 0.0f, 1.0f);
-        depth_far = std::clamp(depth_far, 0.0f, 1.0f);
+    }
+    else {
+        options->depth_near = std::clamp(options->depth_near, 0.0f, 1.0f);
+        options->depth_far = std::clamp(options->depth_far, 0.0f, 1.0f);
     }
 
     glm::vec3 center = { (minx + maxx) * 0.5f, (miny + maxy) * 0.5f, (minz + maxz) * 0.5f };
@@ -577,20 +585,20 @@ int main(int argc, char** argv)
     // Setup camera
     Camera cam;
     cam.up = { 0,1,0 };
-    cam.perspective = (perspective_flag != 0);
-    cam.fov_deg = fov;
+    cam.perspective = (options->perspective_flag != 0);
+    cam.fov_deg = options->fov;
 
     // Set camera position and look-at based on user input or auto placement
-    if (custom_cam_provided) {
-        cam.position = custom_cam_pos;
+    if (options->custom_cam_provided) {
+        cam.position = options->custom_cam_pos;
     }
     else {
         // Auto placement: position behind model along Z-axis
         cam.position = { center.x, center.y, center.z + span * 2.5f };
     }
 
-    if (custom_lookat_provided) {
-        cam.look_at = custom_look_at;
+    if (options->custom_lookat_provided) {
+        cam.look_at = options->custom_look_at;
     }
     else {
         cam.look_at = center;
@@ -598,12 +606,12 @@ int main(int argc, char** argv)
 
     // For orthographic camera
     float ortho_scale;
-    if (custom_orth_scale_provided) {
-        ortho_scale = custom_orth_scale;
+    if (options->custom_orth_scale_provided) {
+        ortho_scale = options->custom_orth_scale;
     }
     else {
 
-        float aspect = float(width) / height;
+        float aspect = float(options->width) / float(options->height);
         float half_spanx = spanx / 2;
         float half_spany = spany / 2;
         ortho_scale = std::max(half_spanx / aspect, half_spany) * 1.2f;
@@ -620,30 +628,38 @@ int main(int argc, char** argv)
 
     // Generate depth map
     float zmin, zmax;
-    auto depth = generate_depth_map(mesh, width, height, cam, ortho_scale, zmin, zmax, depth_near, depth_far);
+    auto depth = generate_depth_map(mesh, options->width, options->height,
+        cam, ortho_scale, zmin, zmax, options->depth_near, options->depth_far);
     std::cout << "Depth zmin=" << zmin << " zmax=" << zmax << "\n";
 
     // Save depth visualization image
-    std::vector<uint8_t> depth_vis(width * height * 3);
-    for (int i = 0; i < width * height; ++i) {
+    std::vector<uint8_t> depth_vis(options->width * options->height * 3);
+    for (int i = 0; i < options->width * options->height; ++i) {
         uint8_t v = (uint8_t)std::round(std::clamp(depth[i], 0.0f, 1.0f) * 255.0f);
         depth_vis[i * 3 + 0] = v; depth_vis[i * 3 + 1] = v; depth_vis[i * 3 + 2] = v;
     }
-    std::string depth_out = outprefix + "_depth.png";
-    stbi_write_png(depth_out.c_str(), width, height, 3, depth_vis.data(), width * 3);
+    std::string depth_out = options->outprefix + "_depth.png";
+    stbi_write_png(depth_out.c_str(), options->width, options->height, 3, depth_vis.data(), options->width * 3);
     std::cout << "Wrote depth visualization: " << depth_out << "\n";
+
+    std::cout << "Normalized depth range: min="
+        << *std::min_element(depth.begin(), depth.end())
+        << " max="
+        << *std::max_element(depth.begin(), depth.end()) << "\n";
+
 
     // Load texture if provided
     std::vector<uint8_t> texture;
     int tw = 0, th = 0, tchan = 0;
     bool haveTex = false;
 
-    if (texpath != "null") {
-        if (load_texture_rgb(texpath, texture, tw, th, tchan)) {
+    if (options->texpath != "null") {
+        if (load_texture_rgb(options->texpath, texture, tw, th, tchan)) {
             haveTex = true;
-            std::cout << "Loaded texture " << texpath << " (" << tw << "x" << th << " ch=" << tchan << ")\n";
-        } else {
-            std::cout << "Failed to load texture '" << texpath << "'. Falling back to random dots.\n";
+            std::cout << "Loaded texture " << options->texpath << " (" << tw << "x" << th << " ch=" << tchan << ")\n";
+        }
+        else {
+            std::cout << "Failed to load texture '" << options->texpath << "'. Falling back to random dots.\n";
         }
     }
     else {
@@ -652,13 +668,32 @@ int main(int argc, char** argv)
 
     // Generate stereogram
     std::vector<uint8_t> sirds_rgb;
-    generate_sirds_unionfind_color(depth, width, height, eye_sep,
-        texture, tw, th, tchan,
+    generate_sirds_unionfind_color(depth,
+        options->width,
+        options->height,
+        options->eye_sep,
+        texture,
+        tw,
+        th,
+        tchan,
         sirds_rgb);
 
-    std::string sirds_out = outprefix + "_sirds.png";
-    stbi_write_png(sirds_out.c_str(), width, height, 3, sirds_rgb.data(), width * 3);
+    std::string sirds_out = options->outprefix + "_sirds.png";
+    stbi_write_png(sirds_out.c_str(), options->width, options->height, 3, sirds_rgb.data(), options->width * 3);
     std::cout << "Wrote stereogram: " << sirds_out << "\n";
 
     return 0;
+}
+
+// ---------- Main ----------
+int main(int argc, char** argv)
+{
+    auto options = std::make_shared<Options>();
+
+    if (!parseArgs(argc, argv, options))
+        return 1;
+
+    auto result = create_stereogram(options);
+
+    return result;
 }
