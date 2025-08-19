@@ -66,7 +66,7 @@ private:
     static void transformMesh(stl& mesh, const std::shared_ptr<Options>& options)
     {
         float* vdata = mesh.m_vectors.data();
-        size_t vcount = mesh.m_num_triangles * 3;
+        size_t vcount = static_cast<size_t>(mesh.m_num_triangles) * 3;
 
         v::scale(vdata, vcount, options->sc.x, options->sc.y, options->sc.z);
         v::shear_mesh(vdata, vcount, options->shear.x, options->shear.y, options->shear.z);
