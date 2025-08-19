@@ -31,9 +31,17 @@ target_include_directories(stl_lib PUBLIC
 
 # --- Now create your main executable ---
 add_executable(magic_eye
-    stl_to_sirds_full.cpp
+    Camera.h
+    DepthMapGenerator.h
+    Options.h
+    SIRDSGenerator.h
     stb_image.h
     stb_image_write.h
+    StereogramGenerator.h
+    TextureSampler.h
+    vectorutils.h
+    stl_to_sirds.cpp
+
 )
 
 # --- Link the STL library and GLM into magic_eye ---
