@@ -1,3 +1,4 @@
+// written by Paul Baxter
 #pragma once
 
 #include <vector>
@@ -5,8 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-constexpr float defaultFov = 45.0f;
-constexpr float tolerance = 1e-6f;
+#include "Options.h"
 
 class Camera {
 public:
@@ -15,7 +15,6 @@ public:
     glm::vec3 up;
     float fov_deg;
     bool perspective;
-
 
     Camera() : position(0, 0, 0), look_at(0, 0, 0), up(0, 1, 0),
         fov_deg(defaultFov), perspective(true)

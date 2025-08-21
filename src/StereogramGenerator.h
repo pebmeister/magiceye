@@ -1,3 +1,4 @@
+﻿// written by Paul Baxter
 #pragma once
 #include <stl.h>
 #include <iostream>
@@ -7,16 +8,18 @@
 #include "SIRDSGenerator.h"
 #include "Options.h"
 
+// stb_image libraries for loading/writing textures/images
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-
 class StereogramGenerator {
 public:
+    // Main entry point for creating a stereogram
     static int create(const std::shared_ptr<Options>& options)
     {
+        // Load STL mesh from file
         stl mesh;
         if (mesh.read_stl(options->stlpath.c_str()) != 0) {
             std::cerr << "Failed to read STL: " << options->stlpath << "\n";
@@ -24,13 +27,19 @@ public:
         }
         std::cout << "Loaded triangles: " << mesh.m_num_triangles << "\n";
 
+        // Apply transformations (scale, shear, rotate, translate) to the mesh
         transformMesh(mesh, options);
 
+        // Compute the bounding box center and span (size of object in space)
         auto [center, span] = calculateMeshBounds(mesh.m_vectors.data(), mesh.m_num_triangles * 3);
 
+        // Setup camera based on options and bounding box
         Camera cam = setupCamera(options, center, span);
+
+        // Compute orthographic projection scale (if used)
         float ortho_scale = calculateOrthoScale(options, span);
 
+        // Generate depth map from STL mesh
         float zmin, zmax;
         auto depth = DepthMapGenerator::generate(mesh, options->width, options->height,
             cam, ortho_scale, zmin, zmax,
@@ -39,30 +48,36 @@ public:
 
         std::cout << "Depth zmin=" << zmin << " zmax=" << zmax << "\n";
 
+        // Save grayscale visualization of depth map for debugging
         saveDepthVisualization(depth, options);
 
+        // Load texture (if provided) or fall back to random-dot pattern
         auto textureData = loadTexture(options);
 
+        // Generate stereogram image (Single Image Random Dot Stereogram)
         std::vector<uint8_t> sirds_rgb;
         SIRDSGenerator::generate(depth, options->width, options->height, options->eye_sep,
             textureData.texture, textureData.tw, textureData.th, textureData.tchan,
             sirds_rgb, options->texture_brightness, options->texture_contrast,
             options->bg_separation);
 
+        // Save stereogram image to disk
         saveStereogram(sirds_rgb, options);
 
         return 0;
     }
 
 private:
+    // Structure for holding texture data
     struct TextureData {
-        std::vector<uint8_t> texture;
-        int tw = 0;
-        int th = 0;
-        int tchan = 0;
-        bool hasTexture = false;
+        std::vector<uint8_t> texture;  // Raw pixel data
+        int tw = 0;                    // Width
+        int th = 0;                    // Height
+        int tchan = 0;                 // Number of channels (RGB=3, RGBA=4, etc.)
+        bool hasTexture = false;       // True if valid texture loaded
     };
 
+    // Apply transformations from options to mesh vertices
     static void transformMesh(stl& mesh, const std::shared_ptr<Options>& options)
     {
         float* vdata = mesh.m_vectors.data();
@@ -74,6 +89,7 @@ private:
         v::translate(vdata, vcount, options->trans.x, options->trans.y, options->trans.z);
     }
 
+    // Compute mesh bounds → returns center and largest span (size in 3D space)
     static std::pair<glm::vec3, float> calculateMeshBounds(const float* vdata, size_t vcount)
     {
         float minx = 1e9f, miny = 1e9f, minz = 1e9f;
@@ -90,6 +106,7 @@ private:
         return { center, span };
     }
 
+    // Setup camera parameters from options (position, look-at, projection)
     static Camera setupCamera(const std::shared_ptr<Options>& options, const glm::vec3& center, float span)
     {
         Camera cam;
@@ -97,6 +114,7 @@ private:
         cam.perspective = (options->perspective_flag != 0);
         cam.fov_deg = options->fov;
 
+        // Camera position
         if (options->custom_cam_provided) {
             cam.position = options->custom_cam_pos;
         }
@@ -104,6 +122,7 @@ private:
             cam.position = { center.x, center.y, center.z + span * 2.5f };
         }
 
+        // Camera look-at target
         if (options->custom_lookat_provided) {
             cam.look_at = options->custom_look_at;
         }
@@ -114,6 +133,7 @@ private:
         return cam;
     }
 
+    // Compute orthographic projection scale based on options and bounding box span
     static float calculateOrthoScale(const std::shared_ptr<Options>& options, float span)
     {
         if (options->custom_orth_scale_provided) {
@@ -121,9 +141,12 @@ private:
         }
 
         float aspect = static_cast<float>(options->width) / options->height;
-        return span * 0.6f * std::max(1.0f / aspect, 1.0f) * 1.2f;
+        // Compute default orthographic scale based on mesh span, screen aspect ratio, 
+        // and empirical tuning factors (0.6f and 1.2f) to ensure object fits comfortably in view.
+        return span * options->orthTuneLow * std::max(1.0f / aspect, 1.0f) * options->orthTuneHi;
     }
 
+    // Save depth map visualization as grayscale PNG
     static void saveDepthVisualization(const std::vector<float>& depth, const std::shared_ptr<Options>& options)
     {
         std::vector<uint8_t> depth_vis(options->width * options->height * 3);
@@ -140,6 +163,7 @@ private:
         std::cout << "Wrote depth visualization: " << depth_out << "\n";
     }
 
+    // Load texture from file if provided, otherwise fallback to random dots
     static TextureData loadTexture(const std::shared_ptr<Options>& options)
     {
         TextureData data;
@@ -163,6 +187,7 @@ private:
         return data;
     }
 
+    // Save final stereogram (SIRDS) image as PNG
     static void saveStereogram(const std::vector<uint8_t>& sirds_rgb, const std::shared_ptr<Options>& options)
     {
         std::string sirds_out = options->outprefix + "_sirds.png";

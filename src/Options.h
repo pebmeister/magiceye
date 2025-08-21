@@ -1,3 +1,4 @@
+// written by Paul Baxter
 #pragma once
 
 #include <string>
@@ -6,6 +7,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <iostream>
+
 #include "vectorutils.h"
 
 using v = vectorutils;
@@ -13,9 +16,13 @@ using v = vectorutils;
 constexpr int defaultWidth = 1200;
 constexpr int defaultHeight = 800;
 constexpr int defaultEyeSep = 100;
+constexpr float defaultFov = 45.0f;
+constexpr float tolerance = 1e-6f;
+constexpr float defaultOrthTuneLow = 0.6f;
+constexpr float defaultOrthTuneHi = 1.2f;
+
 
 #include "Camera.h"
-#include <iostream>
 
 class Options {
 public:
@@ -44,25 +51,7 @@ public:
     float texture_brightness = 1.0f;
     float texture_contrast = 1.0f;
     float bg_separation = 0.0f;
+    float orthTuneLow = defaultOrthTuneLow;
+    float orthTuneHi = defaultOrthTuneHi;
     bool custom_depth_range = false;
-
-    static float parseFloat(const std::string& str)
-    {
-        float out;
-        std::stringstream ss(str);
-        ss >> out;
-        return out;
-    }
-
-    static glm::vec3 parseVec3(const std::string& str)
-    {
-        std::stringstream ss(str);
-        glm::vec3 v{ 0, 0, 0 };
-        char comma;
-        ss >> v.x >> comma >> v.y >> comma >> v.z;
-        if (ss.fail()) {
-            std::cerr << "Warning: Invalid vector format '" << str << "'. Using (0,0,0)\n";
-        }
-        return v;
-    }
 };

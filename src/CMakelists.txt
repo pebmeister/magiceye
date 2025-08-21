@@ -24,6 +24,7 @@ FetchContent_MakeAvailable(glm)
 # --- Create a library target from the STL source ---
 add_library(stl_lib
     ${pebmeister_stl_SOURCE_DIR}/stl.cpp
+    ${pebmeister_stl_SOURCE_DIR}/stl.h
 )
 target_include_directories(stl_lib PUBLIC
     ${pebmeister_stl_SOURCE_DIR}
@@ -34,6 +35,7 @@ add_executable(magic_eye
     Camera.h
     DepthMapGenerator.h
     Options.h
+    ParseArgs.h
     SIRDSGenerator.h
     stb_image.h
     stb_image_write.h
@@ -41,9 +43,7 @@ add_executable(magic_eye
     TextureSampler.h
     vectorutils.h
     stl_to_sirds.cpp
-
 )
 
 # --- Link the STL library and GLM into magic_eye ---
 target_link_libraries(magic_eye PRIVATE stl_lib glm::glm)
-

@@ -1,9 +1,11 @@
+// written by Paul Baxter
 #pragma once
 #include <vector>
 #include <array>
 #include <string>
 #include <algorithm>
 #include <cmath>
+
 #include "stb_image.h"
 
 class TextureSampler {

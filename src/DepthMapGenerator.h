@@ -1,14 +1,13 @@
 // written by Paul Baxter
 
 #pragma once
-#include "stl.h"
-#include "Camera.h"
 #include <vector>
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "stl.h"
+#include "Camera.h"
 
 class DepthMapGenerator {
 
@@ -57,9 +56,9 @@ private:
         std::vector<float>& zbuffer)
     {
         glm::vec3 vworld[3] = { {tri[0], tri[1], tri[2]}, {tri[3], tri[4], tri[5]}, {tri[6], tri[7], tri[8]} };
-        glm::vec3 vcam[3];
-        float ndc_x[3], ndc_y[3], zcam[3];
-        bool validProj[3];
+        glm::vec3 vcam[3]{};
+        float ndc_x[3]{}, ndc_y[3]{}, zcam[3]{};
+        bool validProj[3]{};
 
         for (int i = 0; i < 3; i++) {
             glm::vec3 rel = vworld[i] - cam.position;
@@ -83,7 +82,7 @@ private:
     static void rasterizeTriangle(const float ndc_x[3], const float ndc_y[3], const float zcam[3],
         int width, int height, std::vector<float>& zbuffer)
     {
-        float px[3], py[3];
+        float px[3]{}, py[3]{};
         for (int i = 0; i < 3; i++) {
             float clx = std::max(-1.0f, std::min(1.0f, ndc_x[i]));
             float cly = std::max(-1.0f, std::min(1.0f, ndc_y[i]));
