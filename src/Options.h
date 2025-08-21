@@ -50,7 +50,7 @@ public:
     float depth_far = 0.1f;
     float texture_brightness = 1.0f;
     float texture_contrast = 1.0f;
-    float bg_separation = 0.0f;
+    float bg_separation = 0.4f;
     float orthTuneLow = defaultOrthTuneLow;
     float orthTuneHi = defaultOrthTuneHi;
 };
