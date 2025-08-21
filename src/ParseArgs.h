@@ -38,6 +38,7 @@ private:
         std::cerr << "  -trans x,y,z     : Translate model\n";
         std::cerr << "  -sc x,y,z        : Scale model\n";
         std::cerr << "  -orthsc          : Orthographic scale\n";
+        std::cerr << "  -sepbg           : background seperation scale\n";
         std::cerr << "  -orthtune lo hi  : Orthographic scale tuning lo hi (default 0.6 1.2)\n";
         std::cerr << "  -shear x,y,z     : Shear model (XY,XZ,YZ)\n";
         std::cerr << "  -depthrange near far : Set normalized depth range (default: 1.0 0.0)\n";
@@ -104,9 +105,8 @@ public:
                 options->custom_orth_scale_provided = true;
             }
             else if (arg == "-depthrange" && i + 2 < argc) {
-                options->custom_depth_near = parseFloat(argv[++i]);
-                options->custom_depth_far = parseFloat(argv[++i]);
-                options->custom_depth_range = true;
+                options->depth_near = parseFloat(argv[++i]);
+                options->depth_far = parseFloat(argv[++i]);
             }
             else if (arg == "-orthtune" && i + 2 < argc) {
                 options->orthTuneLow = parseFloat(argv[++i]);

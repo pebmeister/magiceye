@@ -6,6 +6,7 @@
 #include <stack>
 
 #include "TextureSampler.h"
+#include "Options.h"
 
 class SIRDSGenerator {
 private:
@@ -214,7 +215,6 @@ private:
                 }
 
                 // Connect foreground pixels horizontally (same as UnionFind)
-                const float foreground_threshold = 0.75f;
                 float d = adjusted_depth[y * width + x];
                 if (d > foreground_threshold) {
                     // Connect to left neighbor
@@ -328,7 +328,6 @@ private:
     static void buildUnions(int y, int width, const std::vector<float>& adjusted_depth,
         const std::vector<int>& separation_map, UnionFind& uf)
     {
-        const float foreground_threshold = 0.75f;
 
         for (int x = 0; x < width; ++x) {
             int sep = separation_map[y * width + x];
@@ -361,8 +360,6 @@ private:
         std::uniform_int_distribution<int>& distr,
         float brightness, float contrast)
     {
-        const float foreground_threshold = 0.75f;
-
         for (int x = 0; x < width; ++x) {
             if (!is_root[x]) continue;
 
@@ -465,12 +462,10 @@ private:
     static void applyEdgeSmoothing(const std::vector<float>& adjusted_depth,
         std::vector<uint8_t>& out_rgb, int width, int height)
     {
-        const float foreground_threshold = 0.75f;
-
         for (int y = 1; y < height - 1; ++y) {
             for (int x = 1; x < width - 1; ++x) {
                 float d = adjusted_depth[y * width + x];
-                if (d > foreground_threshold) {
+                if (d > smoothThreshold) {
                     smoothPixel(x, y, width, out_rgb);
                 }
             }

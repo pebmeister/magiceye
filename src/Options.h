@@ -20,7 +20,9 @@ constexpr float defaultFov = 45.0f;
 constexpr float tolerance = 1e-6f;
 constexpr float defaultOrthTuneLow = 0.6f;
 constexpr float defaultOrthTuneHi = 1.2f;
-
+// TODO: have these as options
+constexpr float foreground_threshold = 0.90f;
+constexpr float smoothThreshold = 0.75;
 
 #include "Camera.h"
 
@@ -46,12 +48,9 @@ public:
     bool custom_orth_scale_provided = false;
     float depth_near = 0.75f;
     float depth_far = 0.1f;
-    float custom_depth_near = 0.75f;
-    float custom_depth_far = 0.1f;
     float texture_brightness = 1.0f;
     float texture_contrast = 1.0f;
     float bg_separation = 0.0f;
     float orthTuneLow = defaultOrthTuneLow;
     float orthTuneHi = defaultOrthTuneHi;
-    bool custom_depth_range = false;
 };

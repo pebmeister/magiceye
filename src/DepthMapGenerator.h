@@ -137,27 +137,33 @@ private:
             }
         }
 
-        float separation_depth = out_zmax + (out_zmax - out_zmin) * bg_separation;
-        out_zmax = separation_depth;
+        // Create separation by extending the range
+        float extended_zmax = out_zmax + (out_zmax - out_zmin) * bg_separation;
 
         std::vector<float> depth(width * height, 0.0f);
-        if (!std::isfinite(out_zmin) || !std::isfinite(out_zmax)) {
+        if (!std::isfinite(out_zmin) || !std::isfinite(extended_zmax)) {
             return depth;
         }
 
-        float range = out_zmax - out_zmin;
+        float range = extended_zmax - out_zmin;
         if (range < tolerance) range = 1.0f;
 
         for (int i = 0; i < width * height; ++i) {
             float z = zbuffer[i];
             if (!std::isfinite(z)) {
+                // Background gets the extended maximum depth
                 depth[i] = depth_far;
             }
             else {
+                // Mesh gets compressed into the front portion of the range
                 float t = (z - out_zmin) / range;
                 depth[i] = depth_near + (depth_far - depth_near) * t;
             }
         }
+
+        out_zmax = extended_zmax; // Update the output max
+
         return depth;
     }
+
 };
