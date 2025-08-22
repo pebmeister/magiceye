@@ -53,6 +53,15 @@ public:
         return color;
     }
 
+    /// <summary>
+    /// Load a file into a 3 channel vector
+    /// </summary>
+    /// <param name="path"></param>
+    /// <param name="out"></param>
+    /// <param name="w"></param>
+    /// <param name="h"></param>
+    /// <param name="channels"></param>
+    /// <returns></returns>
     static bool loadRGB(const std::string& path, std::vector<uint8_t>& out,
         int& w, int& h, int& channels)
     {

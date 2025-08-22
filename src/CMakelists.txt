@@ -5,6 +5,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 
+# --- Fetch stb libraries ---
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(stb)
+
 # --- Fetch the pebmeister STL project ---
 FetchContent_Declare(
     pebmeister_stl
@@ -37,13 +45,14 @@ add_executable(magic_eye
     Options.h
     ParseArgs.h
     SIRDSGenerator.h
-    stb_image.h
-    stb_image_write.h
     StereogramGenerator.h
     TextureSampler.h
     vectorutils.h
     stl_to_sirds.cpp
 )
+
+# --- Add stb include directory ---
+target_include_directories(magic_eye PRIVATE ${stb_SOURCE_DIR})
 
 # --- Link the STL library and GLM into magic_eye ---
 target_link_libraries(magic_eye PRIVATE stl_lib glm::glm)

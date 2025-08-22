@@ -34,7 +34,6 @@ public:
     int width = defaultWidth;
     int height = defaultHeight;
     int eye_sep = defaultEyeSep;
-    float fov = defaultFov;
     int perspective_flag = 1;
     glm::vec3 custom_cam_pos = { 0, 0, 0 };
     glm::vec3 custom_look_at = { 0, 0, 0 };
@@ -42,10 +41,11 @@ public:
     glm::vec3 trans = { 0, 0, 0 };
     glm::vec3 sc = { 1, 1, 1 };
     glm::vec3 shear = { 0, 0, 0 };
-    float custom_orth_scale = 1;
     bool custom_cam_provided = false;
     bool custom_lookat_provided = false;
     bool custom_orth_scale_provided = false;
+    float custom_orth_scale = 1;
+    float fov = defaultFov;
     float depth_near = 0.75f;
     float depth_far = 0.1f;
     float texture_brightness = 1.0f;
