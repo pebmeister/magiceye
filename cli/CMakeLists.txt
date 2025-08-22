@@ -1,5 +1,5 @@
 # --- Create the CLI executable ---
-add_executable(magic_eye_cli stl_to_sirds.cpp)
+add_executable(magic_eye_cli stl_to_sirds.cpp ParseArgs.h)
 
 # --- Add include directory for cleaner includes ---
 target_include_directories(magic_eye_cli PRIVATE ${CMAKE_SOURCE_DIR}/lib)
