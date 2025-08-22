@@ -42,3 +42,4 @@ target_include_directories(stl_lib PUBLIC
 # --- Add subdirectories ---
 add_subdirectory(lib)
 add_subdirectory(cli)
+add_subdirectory(unittests)
