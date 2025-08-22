@@ -27,24 +27,26 @@ private:
     {
         std::cerr << "Usage: magic_eye input.stl texture.png/null outprefix [options]\n";
         std::cerr << "Options:\n";
-        std::cerr << "  -w width         : Output width (default: " << defaultWidth << ")\n";
-        std::cerr << "  -h height        : Output height (default: " << defaultHeight << ")\n";
-        std::cerr << "  -sep eye_sep     : Eye separation in pixels (default: " << defaultEyeSep << ")\n";
-        std::cerr << "  -fov fov_deg     : Field of view in degrees (default: " << defaultFov << ")\n";
-        std::cerr << "  -persp 0|1       : 1 for perspective, 0 for orthographic (default: 1)\n";
-        std::cerr << "  -cam x,y,z       : Camera position (default: auto)\n";
-        std::cerr << "  -look x,y,z      : Look-at point (default: auto)\n";
-        std::cerr << "  -rot x,y,z       : Rotate model (degrees, XYZ order)\n";
-        std::cerr << "  -trans x,y,z     : Translate model\n";
-        std::cerr << "  -sc x,y,z        : Scale model\n";
-        std::cerr << "  -orthsc          : Orthographic scale\n";
-        std::cerr << "  -sepbg           : background seperation scale\n";
-        std::cerr << "  -depthgama depth : depth gama adjust (0-1) (default .9)\n";
-        std::cerr << "  -orthtune lo hi  : Orthographic scale tuning lo hi (default 0.6 1.2)\n";
-        std::cerr << "  -shear x,y,z     : Shear model (XY,XZ,YZ)\n";
+        std::cerr << "  -w width             : Output width (default: " << defaultWidth << ")\n";
+        std::cerr << "  -h height            : Output height (default: " << defaultHeight << ")\n";
+        std::cerr << "  -sep eye_sep         : Eye separation in pixels (default: " << defaultEyeSep << ")\n";
+        std::cerr << "  -fov fov_deg         : Field of view in degrees (default: " << defaultFov << ")\n";
+        std::cerr << "  -persp 0|1           : 1 for perspective, 0 for orthographic (default: 1)\n";
+        std::cerr << "  -cam x,y,z           : Camera position (default: auto)\n";
+        std::cerr << "  -look x,y,z          : Look-at point (default: auto)\n";
+        std::cerr << "  -rot x,y,z           : Rotate model (degrees, XYZ order)\n";
+        std::cerr << "  -trans x,y,z         : Translate model\n";
+        std::cerr << "  -sc x,y,z            : Scale model\n";
+        std::cerr << "  -orthsc              : Orthographic scale\n";
+        std::cerr << "  -sepbg               : background seperation scale\n";
+        std::cerr << "  -depthgama depth     : depth gama adjust (0-1) (default .9)\n";
+        std::cerr << "  -orthtune lo hi      : Orthographic scale tuning lo hi (default 0.6 1.2)\n";
+        std::cerr << "  -shear x,y,z         : Shear model (XY,XZ,YZ)\n";
         std::cerr << "  -depthrange near far : Set normalized depth range (default: 1.0 0.0)\n";
-        std::cerr << "  -brightness val   : Texture brightness (0.5-2.0, default 1.0)\n";
-        std::cerr << "  -contrast val     : Texture contrast (0.5-2.0, default 1.0)\n";
+        std::cerr << "  -brightness val      : Texture brightness (0.5-2.0, default 1.0)\n";
+        std::cerr << "  -contrast val        : Texture contrast (0.5-2.0, default 1.0)\n";
+        std::cerr << "  -fthresh thresh      : Forground threshhold (0-1 default .90)\n";
+        std::cerr << "  -sthresh thresh      : Smooth threshhold (0-1 default .75)\n";
     }
 
 public:
@@ -118,6 +120,12 @@ public:
             }
             else if (arg == "-sepbg" && i + 1 < argc) {
                 options->bg_separation = parseFloat(argv[++i]);
+            }
+            else if (arg == "-fthresh" && i + 1 < argc) {
+                options->foreground_threshold = parseFloat(argv[++i]);
+            }
+            else if (arg == "-sthresh" && i + 1 < argc) {
+                options->smoothThreshold = parseFloat(argv[++i]);
             }
             else {
                 std::cerr << "Unknown or incomplete option: " << arg << "\n";

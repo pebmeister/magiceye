@@ -24,6 +24,9 @@
  */
 class SIRDSGenerator {
 public:
+    static std::shared_ptr<Options> options;
+
+public:
     /// Enumeration of available algorithm methods for generating the SIRDS.
     enum class Method {
         UnionFind,  ///< The primary, robust method using a Union-Find data structure.
@@ -90,15 +93,16 @@ public:
         int eye_separation, const std::vector<uint8_t>& texture,
         int tw, int th, int tchan, std::vector<uint8_t>& out_rgb,
         float texture_brightness, float texture_contrast,
-        float bg_separation, const std::shared_ptr<Options>& options)
+        float bg_separation, const std::shared_ptr<Options>& opt)
     {
-        Method method = Method::UnionFind ;
+        options = opt;
 
+        Method method = Method::UnionFind ;
         // For now, always use the proven UnionFind method.
         // The Recursive method can be implemented later when time permits.
         generateUnionFind(depth, width, height, eye_separation, texture,
             tw, th, tchan, out_rgb, texture_brightness,
-            texture_contrast, bg_separation, options);
+            texture_contrast, bg_separation);
     }
 
     /**
@@ -112,7 +116,7 @@ public:
         int eye_separation, const std::vector<uint8_t>& texture,
         int tw, int th, int tchan, std::vector<uint8_t>& out_rgb,
         float texture_brightness, float texture_contrast,
-        float bg_separation, const std::shared_ptr<Options>& options)
+        float bg_separation)
     {
         // 1. Adjust the depth range based on the background separation parameter.
         std::vector<float> adjusted_depth = adjustDepthRange(depth, bg_separation);
@@ -125,7 +129,7 @@ public:
         std::uniform_int_distribution<int> distr(0, 255);
 
         // 4. Pre-calculate the desired separation for every pixel based on its depth.
-        std::vector<int> separation_map = calculateSeparationMap(adjusted_depth, width, height, eye_separation, options);
+        std::vector<int> separation_map = calculateSeparationMap(adjusted_depth, width, height, eye_separation);
 
         // 5. Initialize the Union-Find structure for linking pixels across a single scanline.
         UnionFind uf(width);
@@ -161,7 +165,7 @@ private:
      * @return A map where each value is the calculated separation for that pixel.
      */
     static std::vector<int> calculateSeparationMap(const std::vector<float>& adjusted_depth,
-        int width, int height, int eye_separation, const std::shared_ptr<Options>& options)
+        int width, int height, int eye_separation)
     {
         // Algorithm tuning parameters
         const int min_separation = 3;          // Minimum allowed separation (for far background).
@@ -181,7 +185,7 @@ private:
 
                 // Core formula: separation increases as the object gets closer (1.0f - d).
                 float sep_float = min_separation + (max_separation - min_separation) *
-                    pow(1.0f - d, options->depth_gamma) * sep_scale;
+                    pow(1.0f - d, SIRDSGenerator::options->depth_gamma) * sep_scale;
 
                 // Clamp the final value to the valid range and store it.
                 separation_map[y * width + x] = std::max(min_separation,
@@ -235,7 +239,6 @@ private:
     static void buildUnions(int y, int width, const std::vector<float>& adjusted_depth,
         const std::vector<int>& separation_map, UnionFind& uf)
     {
-        const float foreground_threshold = 0.75f; // Depth threshold for considering a pixel foreground.
 
         for (int x = 0; x < width; ++x) {
             int sep = separation_map[y * width + x]; // Pre-calculated separation for this pixel.
@@ -246,7 +249,7 @@ private:
             if (left >= 0 && right < width) {
                 float d = adjusted_depth[y * width + x];
                 // Link foreground pixels to their left neighbor for smoother edges.
-                if (d > foreground_threshold && x > 0) {
+                if (d > SIRDSGenerator::options->foreground_threshold && x > 0) {
                     uf.unite(x - 1, x);
                 }
                 // The crucial link: unite the left and right pixels to share the same color.
@@ -280,7 +283,6 @@ private:
         std::uniform_int_distribution<int>& distr,
         float brightness, float contrast)
     {
-        const float foreground_threshold = 0.75f;
 
         for (int x = 0; x < width; ++x) {
             // Only process root pixels.
@@ -291,7 +293,7 @@ private:
             bool propagated = false;
 
             // For foreground objects, try to get color from a neighbor for consistency.
-            if (d > foreground_threshold) {
+            if (d > SIRDSGenerator::options->foreground_threshold) {
                 propagated = tryPropagateFromNeighbors(x, y, width, uf, is_root, rootColor, out_rgb, color);
             }
 
@@ -404,7 +406,7 @@ private:
             for (int x = 1; x < width - 1; ++x) {
                 float d = adjusted_depth[y * width + x];
                 // Only smooth pixels that are in the foreground.
-                if (d > smoothThreshold) {
+                if (d > SIRDSGenerator::options->smoothThreshold) {
                     smoothPixel(x, y, width, out_rgb);
                 }
             }
@@ -431,3 +433,5 @@ private:
         }
     }
 };
+
+std::shared_ptr<Options> SIRDSGenerator::options;
