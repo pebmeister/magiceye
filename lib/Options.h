@@ -51,6 +51,7 @@ public:
     float texture_brightness = 1.0f;
     float texture_contrast = 1.0f;
     float bg_separation = 0.4f;
+    float depth_gamma = 0.9f;
     float orthTuneLow = defaultOrthTuneLow;
     float orthTuneHi = defaultOrthTuneHi;
 };

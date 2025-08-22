@@ -59,7 +59,7 @@ public:
         SIRDSGenerator::generate(depth, options->width, options->height, options->eye_sep,
             textureData.texture, textureData.tw, textureData.th, textureData.tchan,
             sirds_rgb, options->texture_brightness, options->texture_contrast,
-            options->bg_separation);
+            options->bg_separation, options);
 
         // Save stereogram image to disk
         saveStereogram(sirds_rgb, options);

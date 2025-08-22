@@ -39,6 +39,7 @@ private:
         std::cerr << "  -sc x,y,z        : Scale model\n";
         std::cerr << "  -orthsc          : Orthographic scale\n";
         std::cerr << "  -sepbg           : background seperation scale\n";
+        std::cerr << "  -depthgama depth : depth gama adjust (0-1) (default .9)\n";
         std::cerr << "  -orthtune lo hi  : Orthographic scale tuning lo hi (default 0.6 1.2)\n";
         std::cerr << "  -shear x,y,z     : Shear model (XY,XZ,YZ)\n";
         std::cerr << "  -depthrange near far : Set normalized depth range (default: 1.0 0.0)\n";
@@ -111,6 +112,9 @@ public:
             else if (arg == "-orthtune" && i + 2 < argc) {
                 options->orthTuneLow = parseFloat(argv[++i]);
                 options->orthTuneHi = parseFloat(argv[++i]);
+            }
+            else if (arg == "-depthgama" && i + 1 < argc) {
+                options->depth_gamma = parseFloat(argv[++i]);
             }
             else if (arg == "-sepbg" && i + 1 < argc) {
                 options->bg_separation = parseFloat(argv[++i]);

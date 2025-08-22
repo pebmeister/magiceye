@@ -90,13 +90,15 @@ public:
         int eye_separation, const std::vector<uint8_t>& texture,
         int tw, int th, int tchan, std::vector<uint8_t>& out_rgb,
         float texture_brightness, float texture_contrast,
-        float bg_separation, Method method = Method::UnionFind)
+        float bg_separation, const std::shared_ptr<Options>& options)
     {
+        Method method = Method::UnionFind ;
+
         // For now, always use the proven UnionFind method.
         // The Recursive method can be implemented later when time permits.
         generateUnionFind(depth, width, height, eye_separation, texture,
             tw, th, tchan, out_rgb, texture_brightness,
-            texture_contrast, bg_separation);
+            texture_contrast, bg_separation, options);
     }
 
     /**
@@ -110,7 +112,7 @@ public:
         int eye_separation, const std::vector<uint8_t>& texture,
         int tw, int th, int tchan, std::vector<uint8_t>& out_rgb,
         float texture_brightness, float texture_contrast,
-        float bg_separation)
+        float bg_separation, const std::shared_ptr<Options>& options)
     {
         // 1. Adjust the depth range based on the background separation parameter.
         std::vector<float> adjusted_depth = adjustDepthRange(depth, bg_separation);
@@ -123,7 +125,7 @@ public:
         std::uniform_int_distribution<int> distr(0, 255);
 
         // 4. Pre-calculate the desired separation for every pixel based on its depth.
-        std::vector<int> separation_map = calculateSeparationMap(adjusted_depth, width, height, eye_separation);
+        std::vector<int> separation_map = calculateSeparationMap(adjusted_depth, width, height, eye_separation, options);
 
         // 5. Initialize the Union-Find structure for linking pixels across a single scanline.
         UnionFind uf(width);
@@ -159,10 +161,9 @@ private:
      * @return A map where each value is the calculated separation for that pixel.
      */
     static std::vector<int> calculateSeparationMap(const std::vector<float>& adjusted_depth,
-        int width, int height, int eye_separation)
+        int width, int height, int eye_separation, const std::shared_ptr<Options>& options)
     {
         // Algorithm tuning parameters
-        const float depth_gamma = 0.6f;       // Controls the non-linear response of separation to depth.
         const int min_separation = 3;          // Minimum allowed separation (for far background).
         const int max_separation = eye_separation; // Maximum allowed separation (for close foreground).
         const float focus_depth = 0.5f;        // Depth value that requires no adjustment.
@@ -180,7 +181,7 @@ private:
 
                 // Core formula: separation increases as the object gets closer (1.0f - d).
                 float sep_float = min_separation + (max_separation - min_separation) *
-                    pow(1.0f - d, depth_gamma) * sep_scale;
+                    pow(1.0f - d, options->depth_gamma) * sep_scale;
 
                 // Clamp the final value to the valid range and store it.
                 separation_map[y * width + x] = std::max(min_separation,
@@ -397,14 +398,13 @@ private:
     static void applyEdgeSmoothing(const std::vector<float>& adjusted_depth,
         std::vector<uint8_t>& out_rgb, int width, int height)
     {
-        const float foreground_threshold = 0.75f;
-
+ 
         // Iterate through interior pixels (ignore the border for simplicity).
         for (int y = 1; y < height - 1; ++y) {
             for (int x = 1; x < width - 1; ++x) {
                 float d = adjusted_depth[y * width + x];
                 // Only smooth pixels that are in the foreground.
-                if (d > foreground_threshold) {
+                if (d > smoothThreshold) {
                     smoothPixel(x, y, width, out_rgb);
                 }
             }
@@ -427,7 +427,7 @@ private:
             sum += out_rgb[((y - 1) * width + (x - 1)) * 3 + c]; // Up-Left
             sum += out_rgb[((y + 1) * width + (x + 1)) * 3 + c]; // Down-Right
 
-            out_rgb[idx + c] = sum / 10; // Divide by total weight (6 + 1 + 1 + 1 + 1 + 1 + 1 = 12? 10 is used, likely a specific tuning).
+            out_rgb[idx + c] = sum / 10; // Divide by total weight (6 + 1 + 1 + 1 + 1 + 1 + 1 = 12? 10 is used, a specific tuning).
         }
     }
 };
