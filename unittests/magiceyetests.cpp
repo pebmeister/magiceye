@@ -248,11 +248,7 @@ void testEyeSeparationVariations()
     }
 }
 
-
-
-
 class StereogramTest : public ::testing::TestWithParam<std::tuple<std::string, std::string, TestConfig>> {};
-
 
 TEST_P(StereogramTest, GenerateImage)
 {
