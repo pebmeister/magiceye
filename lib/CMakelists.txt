@@ -9,7 +9,7 @@ target_sources(magic_eye_lib INTERFACE
     SIRDSGenerator.h
     StereogramGenerator.h
     TextureSampler.h
-    vectorutils.h
+    vectorutils.h   
 )
 
 # --- Add include directories ---

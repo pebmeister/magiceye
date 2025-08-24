@@ -310,9 +310,9 @@ TEST(stl_test, smoke_test)
     Options options;
     setupBasicOptions(options);
 
-    options.stlpath = "..\\..\\..\\unittests\\stl\\cat.stl";
+    options.stlpath = "..\\..\\..\\unittests\\stl\\Spinosaurus.stl";
     options.texpath = "..\\..\\..\\unittests\\texture\\brick.jpg";
-    options.outprefix = "..\\..\\..\\unittests\\out\\smoke\\cat_brick";
+    options.outprefix = "..\\..\\..\\unittests\\out\\smoke\\Spinosaurus_brick";
     std::filesystem::create_directory("..\\..\\..\\unittests\\out\\smoke\\");
     auto result = StereogramGenerator::create(std::make_shared<Options>(options));
     EXPECT_EQ(result, 0);
