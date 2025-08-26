@@ -4,30 +4,117 @@
 #include <iostream>
 #include <filesystem>
 #include <vector>
+#include <fstream>
 
 #include "Options.h"
 #include "StereogramGenerator.h"
 
 #pragma warning(disable:4996)
 
+static std::string unittestpath = "..\\..\\..\\unittests\\";
+
 namespace fs = std::filesystem;
-void iterateDirectory(const std::string& path, std::vector<fs::path>& files)
+
+// Your test data structure
+struct TestRunData {
+    std::string imagePath;
+    Options options;
+};
+
+static std::vector<TestRunData> globalTestData;
+
+class GlobalTestEnvironment : public ::testing::Environment {
+public:
+    void SetUp() override
+    {
+        // Runs before any tests start
+        globalTestData.clear();
+        std::cout << "Global test setup - starting test run\n";
+    }
+
+    void TearDown() override
+    {
+        // Runs after all tests complete
+        std::cout << "Global test teardown - writing test log\n";
+        writeTestLog();
+    }
+
+    static void writeTestLog()
+    {
+        std::ofstream logFile("test_run_log.csv");
+
+        // Write CSV header
+        logFile << "image_path,stl_path,tex_path,width,height,eye_sep,"
+            << "fov,depth_near,depth_far,texture_brightness,texture_contrast,"
+            << "bg_separation,depth_gamma,foreground_threshold\n";
+
+        for (const auto& data : globalTestData) {
+            logFile << data.imagePath << ","
+                << data.options.stlpath << ","
+                << data.options.texpath << ","
+                << data.options.width << ","
+                << data.options.height << ","
+                << data.options.eye_sep << ","
+                << data.options.fov << ","
+                << data.options.depth_near << ","
+                << data.options.depth_far << ","
+                << data.options.texture_brightness << ","
+                << data.options.texture_contrast << ","
+                << data.options.bg_separation << ","
+                << data.options.depth_gamma << ","
+                << data.options.foreground_threshold << "\n";
+        }
+
+        logFile.close();
+        std::cout << "Logged " << globalTestData.size() << " test runs to test_run_log.csv\n";
+    }
+
+    static void addTestData(const TestRunData& data)
+    {
+        globalTestData.push_back(data);
+    }
+};
+
+static int testNum = 0;
+
+static std::string GetTestName()
+{
+    return std::to_string(++testNum);
+}
+
+// Register the global environment
+::testing::Environment* const global_env =
+::testing::AddGlobalTestEnvironment(new GlobalTestEnvironment);
+
+
+static void iterateDirectory(const std::string& path, std::vector<fs::path>& files)
 {
     try {
-        for (const auto& entry : fs::directory_iterator(path)) {
+        fs::path dirPath(path);
+
+        if (!fs::exists(dirPath)) {
+            std::cerr << "Directory does not exist: " << fs::absolute(dirPath) << std::endl;
+            return;
+        }
+
+        if (!fs::is_directory(dirPath)) {
+            std::cerr << "Path is not a directory: " << fs::absolute(dirPath) << std::endl;
+            return;
+        }
+
+        for (const auto& entry : fs::directory_iterator(dirPath)) {
             if (entry.is_regular_file()) {
-                const auto& path = entry.path();
-                files.push_back(path);
+                files.push_back(entry.path());
             }
         }
     }
     catch (const fs::filesystem_error& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "Filesystem error in " << path << ": " << e.what() << std::endl;
     }
 }
 
 // Recursive iteration
-void iterateRecursive(const std::string& path, std::vector<fs::path>& files)
+static void iterateRecursive(const std::string& path, std::vector<fs::path>& files)
 {
     try {
         for (const auto& entry : fs::recursive_directory_iterator(path)) {
@@ -45,7 +132,7 @@ struct TestConfig {
     Options options;
 };
 
-void setupBasicOptions(Options& options)
+static void setupBasicOptions(Options& options)
 {
     options.sc = { -2.0, -1.0, -1.5 };
     options.rot_deg = { 100, 20, 0 };
@@ -62,6 +149,30 @@ void setupBasicOptions(Options& options)
     options.depth_gamma = 1.01;
 }
 
+std::vector<std::string> generateStlFiles()
+{
+    std::vector<fs::path> stl_paths;
+    std::vector<std::string> stl_files;
+    iterateDirectory(unittestpath + "stl\\", stl_paths);
+    for (auto& path : stl_paths) {
+        stl_files.push_back(path.string());
+    }
+    return stl_files;
+}
+
+std::vector<std::string> generateTextureFiles()
+{
+    std::vector<fs::path> texture_paths;
+    std::vector<std::string> texture_files;
+
+
+    iterateDirectory(unittestpath + "texture\\", texture_paths);
+    for (auto& path : texture_paths) {
+        texture_files.push_back(path.string());
+    }
+    return texture_files;
+}
+
 std::vector<TestConfig> generateTestConfigs()
 {
     std::vector<TestConfig> configs;
@@ -73,14 +184,14 @@ std::vector<TestConfig> generateTestConfigs()
     base.fov = 27;
     base.depth_near = .72;
     base.depth_far = .05;
-    base.eye_sep = 160;
+    base.eye_sep = 180;
     base.texture_brightness = .8;
     base.texture_contrast = 1.0;
     base.bg_separation = .4;
     base.height = 800;
     base.width = 1200;
     base.shear = { .12, .12, .1 };
-    base.depth_gamma = 1.01;
+    base.depth_gamma = 1.0;
 
     // Critical parameter variations
     std::vector<float> fov_values = { 20, 27, 35 };
@@ -106,43 +217,30 @@ std::vector<TestConfig> generateTestConfigs()
     return configs;
 }
 
-std::vector<fs::path> selectRepresentativeFiles(const std::vector<fs::path>& files, size_t count)
+std::vector<std::string> selectRepresentativeFiles(const std::vector<std::string>& files, size_t count)
 {
     if (files.size() <= count) return files;
 
-    std::vector<fs::path> selected;
+    std::vector<std::string> selected;
     // Select files that represent different categories
     for (const auto& file : files) {
-        std::string ext = file.extension().string();
-        std::string stem = file.stem().string();
-
-        // Simple heuristic: pick files with different characteristics
-        if (stem.find("simple") != std::string::npos && selected.size() < count / 3) {
-            selected.push_back(file);
-        }
-        else if (stem.find("complex") != std::string::npos && selected.size() < 2 * count / 3) {
-            selected.push_back(file);
-        }
-        else if (selected.size() < count) {
+        if (selected.size() < count) {
             selected.push_back(file);
         }
     }
-
     return selected;
 }
 
-void testFovVariations()
+static void testFovVariations()
 {
-    std::vector<fs::path> stl_files;
-    iterateDirectory("..\\..\\..\\unittests\\stl\\", stl_files);
+    auto stl_files = generateStlFiles();
+    auto texture_files = generateTextureFiles();
 
-    std::vector<fs::path> texture_files;
-    iterateDirectory("..\\..\\..\\unittests\\texture\\", texture_files);
-
-    std::filesystem::create_directory("..\\..\\..\\unittests\\out\\fov\\");
+    std::filesystem::create_directory(unittestpath + "out\\");
+    std::filesystem::create_directory(unittestpath + "out\\fov\\");
 
     // Select representative samples
-    auto representative_stl = selectRepresentativeFiles(stl_files, 2); // Pick 2 diverse STLs
+    auto representative_stl = selectRepresentativeFiles(stl_files, 1);          // Pick 1 STLs
     auto representative_textures = selectRepresentativeFiles(texture_files, 1); // Pick 1 texture
 
     std::vector<TestConfig> test_configs = generateTestConfigs();
@@ -155,11 +253,17 @@ void testFovVariations()
                 for (float fov = 10; fov < 45; fov += 5) {
                     // Apply configuration and test
                     config.options.fov = fov;
-                    config.options.stlpath = stlpath.string();
-                    config.options.texpath = texturepath.string();
-                    config.options.depth_gamma = 1.0;
-                    config.options.outprefix = "..\\..\\..\\unittests\\out\\fov\\" + std::to_string(n++);
+                    config.options.stlpath = stlpath;
+                    config.options.texpath = texturepath;
+                    config.options.outprefix = unittestpath + "out\\fov\\" + GetTestName();
                     auto result = StereogramGenerator::create(std::make_shared<Options>(config.options));
+
+                    // Log the test run data
+                    TestRunData data;
+                    data.imagePath = config.options.outprefix + ".png";
+                    data.options = config.options;
+                    GlobalTestEnvironment::addTestData(data);
+
                     EXPECT_EQ(result, 0);
                 }
             }
@@ -167,18 +271,16 @@ void testFovVariations()
     }
 }
 
-void testDepthVariations()
+static void testDepthVariations()
 {
-    std::vector<fs::path> stl_files;
-    iterateDirectory("..\\..\\..\\unittests\\stl\\", stl_files);
+    auto stl_files = generateStlFiles();
+    auto texture_files = generateTextureFiles();
 
-    std::vector<fs::path> texture_files;
-    iterateDirectory("..\\..\\..\\unittests\\texture\\", texture_files);
-
-    std::filesystem::create_directory("..\\..\\..\\unittests\\out\\depth\\");
+    std::filesystem::create_directory(unittestpath + "out\\");
+    std::filesystem::create_directory(unittestpath + "out\\depth\\");
 
     // Select representative samples
-    auto representative_stl = selectRepresentativeFiles(stl_files, 2); // Pick 2 diverse STLs
+    auto representative_stl = selectRepresentativeFiles(stl_files, 1);          // Pick 1 STLs
     auto representative_textures = selectRepresentativeFiles(texture_files, 1); // Pick 1 texture
 
     std::vector<TestConfig> test_configs = generateTestConfigs();
@@ -188,20 +290,26 @@ void testDepthVariations()
         for (auto& texturepath : representative_textures) {
             for (auto& config : test_configs) {
 
-                for (float near = 0.65; near < 1.0; near += 0.2) {
-                    for (float far = 0; far < .3; far += 0.2) {
+                for (float nearv = 0.65; nearv < 1.0; nearv += 0.2) {
+                    for (float farv = 0; farv < .3; farv += 0.2) {
 
 
                         // Apply configuration and test
 
-                        config.options.depth_near = near;
-                        config.options.depth_far = far;
-                        config.options.depth_gamma = 1.0;
+                        config.options.depth_near = nearv;
+                        config.options.depth_far = farv;
 
-                        config.options.stlpath = stlpath.string();
-                        config.options.texpath = texturepath.string();
-                        config.options.outprefix = "..\\..\\..\\unittests\\out\\depth\\" + std::to_string(n++);
+                        config.options.stlpath = stlpath;
+                        config.options.texpath = texturepath;
+                        config.options.outprefix = unittestpath + "out\\depth\\" + GetTestName();
                         auto result = StereogramGenerator::create(std::make_shared<Options>(config.options));
+
+                        // Log the test run data
+                        TestRunData data;
+                        data.imagePath = config.options.outprefix + ".png";
+                        data.options = config.options;
+                        GlobalTestEnvironment::addTestData(data);
+
                         EXPECT_EQ(result, 0);
                     }
                 }
@@ -210,18 +318,16 @@ void testDepthVariations()
     }
 }
 
-void testEyeSeparationVariations()
+static void testEyeSeparationVariations()
 {
-    std::vector<fs::path> stl_files;
-    iterateDirectory("..\\..\\..\\unittests\\stl\\", stl_files);
+    auto stl_files = generateStlFiles();
+    auto texture_files = generateTextureFiles();
 
-    std::vector<fs::path> texture_files;
-    iterateDirectory("..\\..\\..\\unittests\\texture\\", texture_files);
-
-    std::filesystem::create_directory("..\\..\\..\\unittests\\out\\eyesep\\");
+    std::filesystem::create_directory(unittestpath + "out\\");
+    std::filesystem::create_directory(unittestpath + "out\\eyesep\\");
 
     // Select representative samples
-    auto representative_stl = selectRepresentativeFiles(stl_files, 2); // Pick 2 diverse STLs
+    auto representative_stl = selectRepresentativeFiles(stl_files, 1);          // Pick 1 STLs
     auto representative_textures = selectRepresentativeFiles(texture_files, 1); // Pick 1 texture
 
     std::vector<TestConfig> test_configs = generateTestConfigs();
@@ -231,16 +337,21 @@ void testEyeSeparationVariations()
         for (auto& texturepath : representative_textures) {
             for (auto& config : test_configs) {
 
-                for (float eyesep = 30; eyesep < 190; eyesep += 5) {
+                for (float eyesep = 30; eyesep < 200; eyesep += 5) {
                     // Apply configuration and test
 
                     config.options.eye_sep = eyesep;
-                    config.options.depth_gamma = 1.0;
 
-                    config.options.stlpath = stlpath.string();
-                    config.options.texpath = texturepath.string();
-                    config.options.outprefix = "..\\..\\..\\unittests\\out\\eyesep\\" + std::to_string(n++);
+                    config.options.stlpath = stlpath;
+                    config.options.texpath = texturepath;
+                    config.options.outprefix = unittestpath + "out\\eyesep\\" + GetTestName();
                     auto result = StereogramGenerator::create(std::make_shared<Options>(config.options));
+
+                    // Log the test run data
+                    TestRunData data;
+                    data.imagePath = config.options.outprefix + ".png";
+                    data.options = config.options;
+                    GlobalTestEnvironment::addTestData(data);
                     EXPECT_EQ(result, 0);
                 }
             }
@@ -250,15 +361,26 @@ void testEyeSeparationVariations()
 
 class StereogramTest : public ::testing::TestWithParam<std::tuple<std::string, std::string, TestConfig>> {};
 
+
 TEST_P(StereogramTest, GenerateImage)
 {
     auto [stl_file, texture_file, config] = GetParam();
     static int n = 0;
 
+    std::filesystem::create_directory(unittestpath + "out\\");
+    std::filesystem::create_directory(unittestpath + "out\\generateImage\\");
+
     config.options.stlpath = stl_file;
     config.options.texpath = texture_file;
-    config.options.outprefix = "..\\..\\..\\unittests\\out\\generateImage\\" + std::to_string(n++);
+    config.options.outprefix = unittestpath + "out\\generateImage\\" + GetTestName();
     auto result = StereogramGenerator::create(std::make_shared<Options>(config.options));
+
+    // Log the test run data
+    TestRunData data;
+    data.imagePath = config.options.outprefix + ".png";
+    data.options = config.options;
+    GlobalTestEnvironment::addTestData(data);
+
     EXPECT_EQ(result, 0);
 }
 
@@ -266,37 +388,41 @@ INSTANTIATE_TEST_SUITE_P(
     MagicEyeTests,
     StereogramTest,
     ::testing::Combine(
-        ::testing::Values("..\\..\\..\\unittests\\stl\\cat.stl", "..\\..\\..\\unittests\\stl\\enterprise.stl"), // Key STLs
-        ::testing::Values("..\\..\\..\\unittests\\texture\\brick.jpg", "..\\..\\..\\unittests\\texture\\01.jpg"),         // Key textures
-        ::testing::ValuesIn(generateTestConfigs())                 // Parameter variations
+        ::testing::ValuesIn(generateStlFiles()),
+        ::testing::ValuesIn(generateTextureFiles()),         // Key textures
+        ::testing::ValuesIn(generateTestConfigs())          // Parameter variations
     )
 );
 
 TEST(stl_test, representative_tests)
 {
-    std::vector<fs::path> stl_files;
-    iterateDirectory("..\\..\\..\\unittests\\stl\\", stl_files);
-
-    std::vector<fs::path> texture_files;
-    iterateDirectory("..\\..\\..\\unittests\\texture\\", texture_files);
-
-    std::filesystem::create_directory("..\\..\\..\\unittests\\out\\representative\\");
+    auto stl_files =  generateStlFiles();
+    auto texture_files = generateTextureFiles();
 
     // Select representative samples
     auto representative_stl = selectRepresentativeFiles(stl_files, 3); // Pick 3 diverse STLs
-    auto representative_textures = selectRepresentativeFiles(texture_files, 2); // Pick 2 textures
-
+    auto representative_textures = selectRepresentativeFiles(texture_files, 3); // Pick 3 textures
     auto test_configs = generateTestConfigs();
+
+    std::filesystem::create_directory(unittestpath + "out\\");
+    std::filesystem::create_directory(unittestpath + "out\\representative\\");
 
     auto n = 1;
     for (auto& stlpath : representative_stl) {
         for (auto& texturepath : representative_textures) {
             for (auto& config : test_configs) {
                 // Apply configuration and test
-                config.options.stlpath = stlpath.string();
-                config.options.texpath = texturepath.string();
-                config.options.outprefix = "..\\..\\..\\unittests\\out\\representative\\" + std::to_string(n++);
+                config.options.stlpath = stlpath;
+                config.options.texpath = texturepath;
+                config.options.outprefix = unittestpath + "out\\representative\\" + GetTestName();
                 auto result = StereogramGenerator::create(std::make_shared<Options>(config.options));
+
+                // Log the test run data
+                TestRunData data;
+                data.imagePath = config.options.outprefix + ".png";
+                data.options = config.options;
+                GlobalTestEnvironment::addTestData(data);
+
                 EXPECT_EQ(result, 0);
             }
         }
@@ -310,11 +436,27 @@ TEST(stl_test, smoke_test)
     Options options;
     setupBasicOptions(options);
 
-    options.stlpath = "..\\..\\..\\unittests\\stl\\Spinosaurus.stl";
-    options.texpath = "..\\..\\..\\unittests\\texture\\brick.jpg";
-    options.outprefix = "..\\..\\..\\unittests\\out\\smoke\\Spinosaurus_brick";
-    std::filesystem::create_directory("..\\..\\..\\unittests\\out\\smoke\\");
+    std::filesystem::create_directory(unittestpath + "out\\");
+    std::filesystem::create_directory(unittestpath + "out\\smoke\\");
+
+    auto stl_files = generateStlFiles();
+    auto texture_files = generateTextureFiles();
+
+    auto representative_stl = selectRepresentativeFiles(stl_files, 1); // Pick 3 diverse STLs
+    auto representative_textures = selectRepresentativeFiles(texture_files, 1); // Pick 3 textures
+
+    options.stlpath = representative_stl[0];
+    options.texpath = representative_textures[0];
+    options.outprefix = unittestpath + "out\\smoke\\" + GetTestName();
+    std::filesystem::create_directory(unittestpath + "out\\smoke\\");
     auto result = StereogramGenerator::create(std::make_shared<Options>(options));
+
+    // Log the test run data
+    TestRunData data;
+    data.imagePath = options.outprefix + ".png";
+    data.options = options;
+    GlobalTestEnvironment::addTestData(data);
+
     EXPECT_EQ(result, 0);
 }
 
@@ -324,48 +466,4 @@ TEST(stl_test, focused_parameter_studies)
     testFovVariations();
     testDepthVariations();
     testEyeSeparationVariations();
-}
-
-namespace magiceye_unit_test
-{
-    TEST(stl_test, magiceye_unit_test)
-    {
-        auto options = std::make_shared<Options>();
-
-        std::vector<fs::path> stl_files;
-        iterateDirectory("..\\..\\..\\unittests\\stl\\", stl_files);
-
-        std::vector<fs::path> texture_files;
-        iterateDirectory("..\\..\\..\\unittests\\texture\\", texture_files);
-
-        for (auto& stlpath : stl_files) {
-            std::string stl = stlpath.filename().string();
-
-            auto dir = std::string("..\\..\\..\\unittests\\out\\") + stl.substr(0, stl.size() - 4);
-            std::filesystem::create_directory(dir);
-
-            for (auto& texturepath : texture_files) {
-                std::string texture = texturepath.filename().string();
-                options->stlpath = std::string("..\\..\\..\\unittests\\stl\\") + stl;
-                options->texpath = std::string("..\\..\\..\\unittests\\texture\\") + texture;
-                options->outprefix = dir + "\\" + stl.substr(0, stl.size() - 4) + "_" + texture.substr(0, texture.size() - 4);
-                options->sc = { -2.0, -1.0, -1.5 };
-                options->rot_deg = { 100, 20, 0 };
-                options->fov = 27;
-                options->depth_near = .72;
-                options->depth_far = .05;
-                options->eye_sep = 160;
-                options->texture_brightness = .8;
-                options->texture_contrast = 1.0;
-                options->bg_separation = .4;
-                options->height = 800;
-                options->width = 1200;
-                options->shear = { .12, .12, .1 };
-                options->depth_gamma = 1.01;
-
-                auto result = StereogramGenerator::create(options);
-                EXPECT_EQ(result, 0);
-            }
-        }
-    }
 }

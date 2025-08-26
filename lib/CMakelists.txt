@@ -1,5 +1,16 @@
+include(FetchContent)
+
+
 # --- Create an INTERFACE library for magic_eye (headers-only) ---
 add_library(magic_eye_lib INTERFACE)
+
+# --- Fetch stb libraries ---
+FetchContent_Declare(
+    obj
+    GIT_REPOSITORY https://github.com/nothings/obj.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(obj)
 
 # --- Add source files to the interface library ---
 target_sources(magic_eye_lib INTERFACE
@@ -12,11 +23,13 @@ target_sources(magic_eye_lib INTERFACE
     vectorutils.h   
 )
 
+
 # --- Add include directories ---
 target_include_directories(magic_eye_lib INTERFACE 
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${stb_SOURCE_DIR}
-)
+    ${obj_SOURCE_DIR}/include   # <-- expose rapidobj headers
+ )
 
 # --- Link dependencies ---
 target_link_libraries(magic_eye_lib INTERFACE stl_lib glm::glm)

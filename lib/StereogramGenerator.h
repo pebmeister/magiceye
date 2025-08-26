@@ -7,6 +7,7 @@
 #include "DepthMapGenerator.h"
 #include "SIRDSGenerator.h"
 #include "Options.h"
+#include "objtostl.h"
 
 // stb_image libraries for loading/writing textures/images
 #define STB_IMAGE_IMPLEMENTATION
@@ -19,12 +20,23 @@ public:
     // Main entry point for creating a stereogram
     static int create(const std::shared_ptr<Options>& options)
     {
-        // Load STL mesh from file
         stl mesh;
-        if (mesh.read_stl(options->stlpath.c_str()) != 0) {
-            std::cerr << "Failed to read STL: " << options->stlpath << "\n";
-            return 1;
+        if (options->stlpath.ends_with(".obj")) {
+            // convert OBJ to stl
+            if (!OBJToSTL::convert(options->stlpath, mesh)) {
+                std::cerr << "Failed to read OBJ: " << options->stlpath << "\n";
+                return 1;
+            }
         }
+        else {
+            // Load STL mesh from file
+            if (mesh.read_stl(options->stlpath.c_str()) != 0) {
+                std::cerr << "Failed to read STL: " << options->stlpath << "\n";
+                return 1;
+            }
+        }
+
+
         std::cout << "Loaded triangles: " << mesh.m_num_triangles << "\n";
 
         // Apply transformations (scale, shear, rotate, translate) to the mesh
@@ -195,4 +207,7 @@ private:
             sirds_rgb.data(), options->width * 3);
         std::cout << "Wrote stereogram: " << sirds_out << "\n";
     }
+
+
+
 };
