@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <vector>
 #include <fstream>
+#include <atomic>
 
 #include "Options.h"
 #include "StereogramGenerator.h"
@@ -27,6 +28,11 @@ class GlobalTestEnvironment : public ::testing::Environment {
 public:
     void SetUp() override
     {
+        fs::path dirPath(unittestpath);
+        if (!fs::exists(dirPath)) {
+            unittestpath = "..\\..\\unittests\\";
+        }
+
         // Runs before any tests start
         globalTestData.clear();
         std::cout << "Global test setup - starting test run\n";
@@ -75,7 +81,7 @@ public:
     }
 };
 
-static int testNum = 0;
+static std::atomic<int> testNum = 0;
 
 static std::string GetTestName()
 {
@@ -85,7 +91,6 @@ static std::string GetTestName()
 // Register the global environment
 ::testing::Environment* const global_env =
 ::testing::AddGlobalTestEnvironment(new GlobalTestEnvironment);
-
 
 static void iterateDirectory(const std::string& path, std::vector<fs::path>& files)
 {
@@ -260,7 +265,7 @@ static void testFovVariations()
 
                     // Log the test run data
                     TestRunData data;
-                    data.imagePath = config.options.outprefix + ".png";
+                    data.imagePath = config.options.outprefix + "_sirds.png";
                     data.options = config.options;
                     GlobalTestEnvironment::addTestData(data);
 
@@ -306,7 +311,7 @@ static void testDepthVariations()
 
                         // Log the test run data
                         TestRunData data;
-                        data.imagePath = config.options.outprefix + ".png";
+                        data.imagePath = config.options.outprefix + "_sirds.png";
                         data.options = config.options;
                         GlobalTestEnvironment::addTestData(data);
 
@@ -349,7 +354,7 @@ static void testEyeSeparationVariations()
 
                     // Log the test run data
                     TestRunData data;
-                    data.imagePath = config.options.outprefix + ".png";
+                    data.imagePath = config.options.outprefix + "_sirds.png";
                     data.options = config.options;
                     GlobalTestEnvironment::addTestData(data);
                     EXPECT_EQ(result, 0);
@@ -377,7 +382,7 @@ TEST_P(StereogramTest, GenerateImage)
 
     // Log the test run data
     TestRunData data;
-    data.imagePath = config.options.outprefix + ".png";
+    data.imagePath = config.options.outprefix + "_sirds.png";
     data.options = config.options;
     GlobalTestEnvironment::addTestData(data);
 
@@ -419,7 +424,7 @@ TEST(stl_test, representative_tests)
 
                 // Log the test run data
                 TestRunData data;
-                data.imagePath = config.options.outprefix + ".png";
+                data.imagePath = config.options.outprefix + "_sirds.png";
                 data.options = config.options;
                 GlobalTestEnvironment::addTestData(data);
 
@@ -445,7 +450,7 @@ TEST(stl_test, smoke_test)
     auto representative_stl = selectRepresentativeFiles(stl_files, 1); // Pick 3 diverse STLs
     auto representative_textures = selectRepresentativeFiles(texture_files, 1); // Pick 3 textures
 
-    options.stlpath = representative_stl[0];
+    options.stlpath = unittestpath + "stl\\13217_Spinosaurus_V1_NEW.obj"; // representative_stl[0];
     options.texpath = representative_textures[0];
     options.outprefix = unittestpath + "out\\smoke\\" + GetTestName();
     std::filesystem::create_directory(unittestpath + "out\\smoke\\");
@@ -453,7 +458,7 @@ TEST(stl_test, smoke_test)
 
     // Log the test run data
     TestRunData data;
-    data.imagePath = options.outprefix + ".png";
+    data.imagePath = options.outprefix + "_sirds.png";
     data.options = options;
     GlobalTestEnvironment::addTestData(data);
 

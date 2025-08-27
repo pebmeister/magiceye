@@ -160,10 +160,8 @@ private:
                 depth[i] = depth_near + (depth_far - depth_near) * t;
             }
         }
-
         out_zmax = extended_zmax; // Update the output max
 
         return depth;
     }
-
 };

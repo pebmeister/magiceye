@@ -8,7 +8,8 @@ class OBJToSTL {
 public:
     static bool convert(const std::string& objfile, stl& mesh)
     {
-        auto result = rapidobj::ParseFile(objfile);
+        rapidobj::Load policy = rapidobj::Load::Optional;        
+        auto result = rapidobj::ParseFile(objfile, rapidobj::MaterialLibrary::Default(policy));
         if (result.error) {
             return false;
         }

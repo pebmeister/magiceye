@@ -36,7 +36,6 @@ public:
             }
         }
 
-
         std::cout << "Loaded triangles: " << mesh.m_num_triangles << "\n";
 
         // Apply transformations (scale, shear, rotate, translate) to the mesh
@@ -207,7 +206,5 @@ private:
             sirds_rgb.data(), options->width * 3);
         std::cout << "Wrote stereogram: " << sirds_out << "\n";
     }
-
-
 
 };
