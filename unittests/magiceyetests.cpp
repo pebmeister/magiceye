@@ -6,13 +6,10 @@
 #include <vector>
 #include <fstream>
 #include <atomic>
-
 #include "Options.h"
 #include "StereogramGenerator.h"
 
 #pragma warning(disable:4996)
-
-static std::string unittestpath = "..\\..\\..\\unittests\\";
 
 namespace fs = std::filesystem;
 
@@ -22,7 +19,17 @@ struct TestRunData {
     Options options;
 };
 
+// Add this to your test file
+struct TestConfig {
+    std::string name;
+    Options options;
+};
+
+static std::string unittestpath = "..\\..\\..\\unittests\\";
 static std::vector<TestRunData> globalTestData;
+static std::atomic<int> testNum = 0;
+static std::vector<std::string> stl_files;
+static std::vector<std::string> texture_files;
 
 class GlobalTestEnvironment : public ::testing::Environment {
 public:
@@ -47,32 +54,71 @@ public:
 
     static void writeTestLog()
     {
-        std::ofstream logFile("test_run_log.csv");
-
-        // Write CSV header
-        logFile << "image_path,stl_path,tex_path,width,height,eye_sep,"
-            << "fov,depth_near,depth_far,texture_brightness,texture_contrast,"
-            << "bg_separation,depth_gamma,foreground_threshold\n";
-
+        std::ofstream logFile("test_run_log.xml");        
+        logFile 
+            << "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+            << "<TestRunDatas>\n";
         for (const auto& data : globalTestData) {
-            logFile << data.imagePath << ","
-                << data.options.stlpath << ","
-                << data.options.texpath << ","
-                << data.options.width << ","
-                << data.options.height << ","
-                << data.options.eye_sep << ","
-                << data.options.fov << ","
-                << data.options.depth_near << ","
-                << data.options.depth_far << ","
-                << data.options.texture_brightness << ","
-                << data.options.texture_contrast << ","
-                << data.options.bg_separation << ","
-                << data.options.depth_gamma << ","
-                << data.options.foreground_threshold << "\n";
+            logFile
+                << "   <TestRunData>\n"
+                << "      <imagePath>" << data.imagePath << "</imagePath>\n"
+                << "      <stlpath>" << data.options.stlpath << "</stlpath>\n"
+                << "      <texpath>" << data.options.texpath << "</texpath>\n"
+                << "      <outprefix>" << data.options.outprefix << "</outprefix>\n"
+                << "      <width>" << data.options.width << "</width>\n"
+                << "      <height>" << data.options.height << "</height>\n"
+                << "      <eye_sep>" << data.options.eye_sep << "</eye_sep>\n"
+                << "      <perspective_flag>" << data.options.perspective_flag << "</perspective_flag>\n"
+                << "      <custom_cam_pos>\n"
+                << "         <x>" << data.options.custom_cam_pos[0] << "</x>\n"
+                << "         <y>" << data.options.custom_cam_pos[1] << "</y>\n"
+                << "         <z>" << data.options.custom_cam_pos[2] << "</z>\n"
+                << "      </custom_cam_pos>\n"
+                << "      <custom_look_at>\n"
+                << "         <x>" << data.options.custom_look_at[0] << "</x>\n"
+                << "         <y>" << data.options.custom_look_at[1] << "</y>\n"
+                << "         <z>" << data.options.custom_look_at[2] << "</z>\n"
+                << "      </custom_look_at>\n"
+                << "      <rot_deg>\n"
+                << "         <x>" << data.options.rot_deg[0] << "</x>\n"
+                << "         <y>" << data.options.rot_deg[1] << "</y>\n"
+                << "         <z>" << data.options.rot_deg[2] << "</z>\n"
+                << "      </rot_deg>\n"
+                << "      <trans>\n"
+                << "         <x>" << data.options.trans[0] << "</x>\n"
+                << "         <y>" << data.options.trans[1] << "</y>\n"
+                << "         <z>" << data.options.trans[2] << "</z>\n"
+                << "      </trans>\n"
+                << "      <sc>\n"
+                << "         <x>" << data.options.sc[0] << "</x>\n"
+                << "         <y>" << data.options.sc[1] << "</y>\n"
+                << "         <z>" << data.options.sc[2] << "</z>\n"
+                << "      </sc>\n"
+                << "      <shear>\n"
+                << "         <x>" << data.options.shear[0] << "</x>\n"
+                << "         <y>" << data.options.shear[1] << "</y>\n"
+                << "         <z>" << data.options.shear[2] << "</z>\n"
+                << "      </shear>\n"
+                << "      <custom_orth_scale>" << data.options.custom_orth_scale << "</custom_orth_scale>\n"
+                << "      <custom_cam_provided>" << data.options.custom_cam_provided << "</custom_cam_provided>\n"
+                << "      <custom_lookat_provided>" << data.options.custom_lookat_provided << "</custom_lookat_provided>\n"
+                << "      <custom_orth_scale_provided>" << data.options.custom_orth_scale_provided << "</custom_orth_scale_provided>\n"
+                << "      <fov>" << data.options.fov << "</fov>\n"
+                << "      <depth_near>" << data.options.depth_near << "</depth_near>\n"
+                << "      <depth_far>" << data.options.depth_far << "</depth_far>\n"
+                << "      <texture_brightness>" << data.options.texture_brightness << "</texture_brightness>\n"
+                << "      <texture_contrast>" << data.options.texture_contrast << "</texture_contrast>\n"
+                << "      <bg_separation>" << data.options.bg_separation << "</bg_separation>\n"
+                << "      <depth_gamma>" << data.options.depth_gamma << "</depth_gamma>\n"
+                << "      <orthTuneLow>" << data.options.orthTuneLow << "</orthTuneLow>\n"
+                << "      <orthTuneHi>" << data.options.orthTuneHi << "</orthTuneHi>\n"
+                << "     <foreground_threshold>" << data.options.foreground_threshold << "</foreground_threshold>\n"
+                << "     <smoothThreshold>" << data.options.smoothThreshold << "</smoothThreshold>\n"
+                << "   </TestRunData>\n";
         }
-
+        logFile << "</TestRunDatas>\n";
         logFile.close();
-        std::cout << "Logged " << globalTestData.size() << " test runs to test_run_log.csv\n";
+        std::cout << "Logged " << globalTestData.size() << " test runs to test_run_log.xml\n";
     }
 
     static void addTestData(const TestRunData& data)
@@ -80,8 +126,6 @@ public:
         globalTestData.push_back(data);
     }
 };
-
-static std::atomic<int> testNum = 0;
 
 static std::string GetTestName()
 {
@@ -131,12 +175,6 @@ static void iterateRecursive(const std::string& path, std::vector<fs::path>& fil
     }
 }
 
-// Add this to your test file
-struct TestConfig {
-    std::string name;
-    Options options;
-};
-
 static void setupBasicOptions(Options& options)
 {
     options.sc = { -2.0, -1.0, -1.5 };
@@ -145,7 +183,7 @@ static void setupBasicOptions(Options& options)
     options.depth_near = .72;
     options.depth_far = .05;
     options.eye_sep = 160;
-    options.texture_brightness = .8;
+    options.texture_brightness = 1.2;
     options.texture_contrast = 1.0;
     options.bg_separation = .4;
     options.height = 800;
@@ -156,24 +194,24 @@ static void setupBasicOptions(Options& options)
 
 std::vector<std::string> generateStlFiles()
 {
-    std::vector<fs::path> stl_paths;
-    std::vector<std::string> stl_files;
-    iterateDirectory(unittestpath + "stl\\", stl_paths);
-    for (auto& path : stl_paths) {
-        stl_files.push_back(path.string());
+    if (stl_files.size() == 0) {
+        std::vector<fs::path> stl_paths;
+        iterateDirectory(unittestpath + "stl\\", stl_paths);
+        for (auto& path : stl_paths) {
+            stl_files.push_back(path.string());
+        }
     }
     return stl_files;
 }
 
 std::vector<std::string> generateTextureFiles()
 {
-    std::vector<fs::path> texture_paths;
-    std::vector<std::string> texture_files;
-
-
-    iterateDirectory(unittestpath + "texture\\", texture_paths);
-    for (auto& path : texture_paths) {
-        texture_files.push_back(path.string());
+    if (texture_files.size() == 0) {
+        std::vector<fs::path> texture_paths;
+        iterateDirectory(unittestpath + "texture\\", texture_paths);
+        for (auto& path : texture_paths) {
+            texture_files.push_back(path.string());
+        }
     }
     return texture_files;
 }
@@ -298,7 +336,6 @@ static void testDepthVariations()
                 for (float nearv = 0.65; nearv < 1.0; nearv += 0.2) {
                     for (float farv = 0; farv < .3; farv += 0.2) {
 
-
                         // Apply configuration and test
 
                         config.options.depth_near = nearv;
@@ -346,7 +383,6 @@ static void testEyeSeparationVariations()
                     // Apply configuration and test
 
                     config.options.eye_sep = eyesep;
-
                     config.options.stlpath = stlpath;
                     config.options.texpath = texturepath;
                     config.options.outprefix = unittestpath + "out\\eyesep\\" + GetTestName();
@@ -365,7 +401,6 @@ static void testEyeSeparationVariations()
 }
 
 class StereogramTest : public ::testing::TestWithParam<std::tuple<std::string, std::string, TestConfig>> {};
-
 
 TEST_P(StereogramTest, GenerateImage)
 {
@@ -447,11 +482,12 @@ TEST(stl_test, smoke_test)
     auto stl_files = generateStlFiles();
     auto texture_files = generateTextureFiles();
 
-    auto representative_stl = selectRepresentativeFiles(stl_files, 1); // Pick 3 diverse STLs
-    auto representative_textures = selectRepresentativeFiles(texture_files, 1); // Pick 3 textures
+    auto representative_stl = selectRepresentativeFiles(stl_files, 2);          // Pick diverse STLs
+    auto representative_textures = selectRepresentativeFiles(texture_files, 1); // Pick textures
 
-    options.stlpath = unittestpath + "stl\\13217_Spinosaurus_V1_NEW.obj"; // representative_stl[0];
+    options.stlpath = representative_stl[0];
     options.texpath = representative_textures[0];
+
     options.outprefix = unittestpath + "out\\smoke\\" + GetTestName();
     std::filesystem::create_directory(unittestpath + "out\\smoke\\");
     auto result = StereogramGenerator::create(std::make_shared<Options>(options));

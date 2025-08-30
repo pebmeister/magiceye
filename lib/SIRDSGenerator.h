@@ -429,6 +429,7 @@ private:
             sum += out_rgb[((y - 1) * width + (x - 1)) * 3 + c]; // Up-Left
             sum += out_rgb[((y + 1) * width + (x + 1)) * 3 + c]; // Down-Right
 
+            // out_rgb[idx + c] = sum / 10; // Divide by total weight (6 + 1 + 1 + 1 + 1 + 1 + 1 = 12? 10 is used, a specific tuning).
             out_rgb[idx + c] = sum / 10; // Divide by total weight (6 + 1 + 1 + 1 + 1 + 1 + 1 = 12? 10 is used, a specific tuning).
         }
     }

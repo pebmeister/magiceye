@@ -32,6 +32,7 @@ public:
             // Load STL mesh from file
             if (mesh.read_stl(options->stlpath.c_str()) != 0) {
                 std::cerr << "Failed to read STL: " << options->stlpath << "\n";
+
                 return 1;
             }
         }
