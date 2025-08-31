@@ -47,6 +47,7 @@ private:
         std::cerr << "  -contrast val        : Texture contrast (0.5-2.0, default 1.0)\n";
         std::cerr << "  -fthresh thresh      : Forground threshhold (0-1 default .90)\n";
         std::cerr << "  -sthresh thresh      : Smooth threshhold (0-1 default .75)\n";
+        std::cerr << "  -sweight weight      : Smooth weigth (default 12.0)\n";
     }
 
 public:
@@ -126,6 +127,9 @@ public:
             }
             else if (arg == "-sthresh" && i + 1 < argc) {
                 options->smoothThreshold = parseFloat(argv[++i]);
+            }
+            else if (arg == "-sweight" && i + 1 < argc) {
+                options->smoothWeight = parseFloat(argv[++i]);
             }
             else {
                 std::cerr << "Unknown or incomplete option: " << arg << "\n";

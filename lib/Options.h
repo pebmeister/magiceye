@@ -53,4 +53,5 @@ public:
     float orthTuneHi = defaultOrthTuneHi;
     float foreground_threshold = 0.90f;
     float smoothThreshold = 0.75;
+    float smoothWeight = 10;
 };

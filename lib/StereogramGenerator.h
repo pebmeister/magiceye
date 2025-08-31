@@ -8,6 +8,7 @@
 #include "SIRDSGenerator.h"
 #include "Options.h"
 #include "objtostl.h"
+#include "Stlsmoother.h"
 
 // stb_image libraries for loading/writing textures/images
 #define STB_IMAGE_IMPLEMENTATION
@@ -41,6 +42,8 @@ public:
 
         // Apply transformations (scale, shear, rotate, translate) to the mesh
         transformMesh(mesh, options);
+
+        smoothSTL(mesh, 15);
 
         // Compute the bounding box center and span (size of object in space)
         auto [center, span] = calculateMeshBounds(mesh.m_vectors.data(), mesh.m_num_triangles * 3);

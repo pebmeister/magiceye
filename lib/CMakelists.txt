@@ -16,9 +16,11 @@ FetchContent_MakeAvailable(obj)
 target_sources(magic_eye_lib INTERFACE
     Camera.h
     DepthMapGenerator.h
+    Laplace.h
     Options.h
     SIRDSGenerator.h
     StereogramGenerator.h
+    Stlsmoother.h
     TextureSampler.h
     vectorutils.h   
 )
