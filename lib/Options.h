@@ -41,6 +41,7 @@ public:
     bool custom_cam_provided = false;
     bool custom_lookat_provided = false;
     bool custom_orth_scale_provided = false;
+    bool laplace_smoothing = false;
     float custom_orth_scale = 1;
     float fov = defaultFov;
     float depth_near = 0.75f;
@@ -54,4 +55,5 @@ public:
     float foreground_threshold = 0.90f;
     float smoothThreshold = 0.75;
     float smoothWeight = 10;
+    int laplace_smooth_layers = 15;
 };

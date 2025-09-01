@@ -43,10 +43,21 @@ public:
         // Apply transformations (scale, shear, rotate, translate) to the mesh
         transformMesh(mesh, options);
 
-        smoothSTL(mesh, 15);
+        // Apply Laplace smoothing
+        if (options->laplace_smoothing) {
+            smoothSTL(mesh, options->laplace_smooth_layers);
+        }
 
         // Compute the bounding box center and span (size of object in space)
         auto [center, span] = calculateMeshBounds(mesh.m_vectors.data(), mesh.m_num_triangles * 3);
+
+        // Example: Add a floor at the bottom of the mesh bounding box
+        float floor_z = center.z - span * 0.5f; // Place floor below the object
+        float floor_size_x = span * 2.0f;       // Make floor wide enough
+        float floor_size_y = span * 2.0f;
+        addFloorMesh(mesh, center.x, center.y, floor_z, floor_size_x, floor_size_y);
+
+
 
         // Setup camera based on options and bounding box
         Camera cam = setupCamera(options, center, span);
@@ -60,6 +71,7 @@ public:
             cam, ortho_scale, zmin, zmax,
             options->depth_near, options->depth_far,
             options->bg_separation);
+
 
         std::cout << "Depth zmin=" << zmin << " zmax=" << zmax << "\n";
 
@@ -75,6 +87,8 @@ public:
             textureData.texture, textureData.tw, textureData.th, textureData.tchan,
             sirds_rgb, options->texture_brightness, options->texture_contrast,
             options->bg_separation, options);
+
+
 
         // Save stereogram image to disk
         saveStereogram(sirds_rgb, options);
@@ -209,6 +223,65 @@ private:
         stbi_write_png(sirds_out.c_str(), options->width, options->height, 3,
             sirds_rgb.data(), options->width * 3);
         std::cout << "Wrote stereogram: " << sirds_out << "\n";
+    }
+
+
+    // New helper : a bottom “floor strip” whose z varies with y(a ramp)
+        static void addFloorMesh(
+            stl & mesh, float cx, float cy, float cz,
+            float size_x, float size_y, float ramp_amount = 80.0,
+            const glm::vec3 & color = { 0.8f,0.8f,0.8f })
+    {
+        // Build a strip that occupies the lower half in Y, and is closer near the bottom.
+        float halfx = size_x * 0.5f;
+        float halfy = size_y * 0.5f;
+
+        // y0 = bottom edge, y1 = mid (so it's just a strip, not the whole frame)
+        float y0 = cy - halfy;
+        float y1 = cy; // midline
+
+        // z at bottom is closer (larger z), fades to farther (smaller z) at y1
+        float z_far = cz - 0.35f * size_y;          // farther (behind object some)
+        float z_near = z_far + ramp_amount;          // closer to camera
+
+        glm::vec3 v0 = { cx - halfx, y0, z_near }; // bottom-left (closer)
+        glm::vec3 v1 = { cx + halfx, y0, z_near }; // bottom-right (closer)
+        glm::vec3 v2 = { cx + halfx, y1, z_far }; // mid-right   (farther)
+        glm::vec3 v3 = { cx - halfx, y1, z_far }; // mid-left    (farther)
+
+        std::vector<float> tris = {
+            v0.x,v0.y,v0.z,  v1.x,v1.y,v1.z,  v2.x,v2.y,v2.z,
+            v0.x,v0.y,v0.z,  v2.x,v2.y,v2.z,  v3.x,v3.y,v3.z
+        };
+
+        for (int i = 0; i < 6; ++i) { mesh.m_rgb_color.insert(mesh.m_rgb_color.end(), { color.r,color.g,color.b }); }
+        mesh.m_vectors.insert(mesh.m_vectors.end(), tris.begin(), tris.end());
+        mesh.m_num_triangles += 2;
+    }
+    // Add a rectangular floor mesh to the STL
+    static void addFloorMesh_1(stl& mesh, float center_x, float center_y, float floor_z, float size_x, float size_y, const glm::vec3& color = {0.8f, 0.8f, 0.8f})
+    {
+        // Four corners of the floor quad
+        glm::vec3 v0 = {center_x - size_x * 0.5f, center_y - size_y * 0.5f, floor_z};
+        glm::vec3 v1 = {center_x + size_x * 0.5f, center_y - size_y * 0.5f, floor_z};
+        glm::vec3 v2 = {center_x + size_x * 0.5f, center_y + size_y * 0.5f, floor_z};
+        glm::vec3 v3 = {center_x - size_x * 0.5f, center_y + size_y * 0.5f, floor_z};
+
+        // Two triangles: v0-v1-v2 and v0-v2-v3
+        std::vector<float> floor_triangles = {
+            v0.x, v0.y, v0.z,  v1.x, v1.y, v1.z,  v2.x, v2.y, v2.z,
+            v0.x, v0.y, v0.z,  v2.x, v2.y, v2.z,  v3.x, v3.y, v3.z
+        };
+
+        // Optionally add color (if mesh.m_rgb_color is used)
+        for (int i = 0; i < 6; ++i) {
+            mesh.m_rgb_color.push_back(color.r);
+            mesh.m_rgb_color.push_back(color.g);
+            mesh.m_rgb_color.push_back(color.b);
+        }
+
+        mesh.m_vectors.insert(mesh.m_vectors.end(), floor_triangles.begin(), floor_triangles.end());
+        mesh.m_num_triangles += 2;
     }
 
 };
