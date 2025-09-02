@@ -40,7 +40,6 @@ public:
 
         mesh.normalizeAndCenter();
 
-
         std::cout << "Loaded triangles: " << mesh.m_num_triangles << "\n";
 
         // Apply transformations (scale, shear, rotate, translate) to the mesh
