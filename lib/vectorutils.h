@@ -8,16 +8,23 @@ class vectorutils {
 public:
 
     // apply 3d rotation of array using Quaternion
-    static void rotateQuaternion(float* array, uint32_t vcount, float xrot_deg, float yrot_deg, float zrot_deg, const glm::vec3& origin = { 0, 0, 0 })
+    static void rotateQuaternion(float* array, uint32_t vcount, float xrot_deg, float yrot_deg, float zrot_deg, const glm::vec3& origin = {0.0f, 0.0f, 0.0f})
     {
+        // Validate input
+        if (!array || vcount == 0) return;
+
+        // Construct quaternion from Euler angles
         glm::quat rotation = glm::quat(glm::vec3(glm::radians(xrot_deg),
-            glm::radians(yrot_deg),
-            glm::radians(zrot_deg)));
+                                             glm::radians(yrot_deg),
+                                             glm::radians(zrot_deg)));
 
-        glm::mat4 transform = glm::translate(glm::mat4(1.0f), origin) *
-            glm::mat4_cast(rotation) *
-            glm::translate(glm::mat4(1.0f), -origin);
+        // Build transformation matrix
+        glm::mat4 toOrigin = glm::translate(glm::mat4(1.0f), -origin);
+        glm::mat4 fromOrigin = glm::translate(glm::mat4(1.0f), origin);
+        glm::mat4 rotMatrix = glm::mat4_cast(rotation);
+        glm::mat4 transform = fromOrigin * rotMatrix * toOrigin;
 
+        // Apply the transformation to each vertex
         for (size_t i = 0; i < vcount; ++i) {
             glm::vec4 v(array[i * 3 + 0], array[i * 3 + 1], array[i * 3 + 2], 1.0f);
             v = transform * v;

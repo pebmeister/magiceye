@@ -115,7 +115,8 @@ private:
 
         v::scale(vdata, vcount, options->sc.x, options->sc.y, options->sc.z);
         v::shear_mesh(vdata, vcount, options->shear.x, options->shear.y, options->shear.z);
-        v::rotateQuaternion(vdata, vcount, options->rot_deg.x, options->rot_deg.y, options->rot_deg.z);
+        v::rotateQuaternion(vdata, vcount, options->rot_deg.x, options->rot_deg.y, options->rot_deg.z, glm::vec3(0, 0, 0));
+
         v::translate(vdata, vcount, options->trans.x, options->trans.y, options->trans.z);
     }
 
