@@ -48,8 +48,8 @@ private:
         std::cerr << "  -fthresh thresh      : Forground threshhold (0-1 default .90)\n";
         std::cerr << "  -sthresh thresh      : Smooth threshhold (0-1 default .75)\n";
         std::cerr << "  -sweight weight      : Smooth weigth (default 12.0)\n";
-        std::cerr << "  -la                  : Enable Laplace mesh smoothing\n";
-        std::cerr << "  -lalayers            : Laplace smooth layers (if -la default 15)\n";
+        std::cerr << "  -laplace             : Enable Laplace mesh smoothing\n";
+        std::cerr << "  -laplacelayers       : Laplace smooth layers (if laplace enabled default 15)\n";
     }
 
 public:
@@ -133,10 +133,10 @@ public:
             else if (arg == "-sweight" && i + 1 < argc) {
                 options->smoothWeight = parseFloat(argv[++i]);
             }
-            else if (arg == "-la" && i + 0 < argc) {
+            else if (arg == "-laplace" && i + 0 < argc) {
                 options->laplace_smoothing = true;
             }
-            else if (arg == "-lalayers" && i + 1 < argc) {
+            else if (arg == "-laplacelayers" && i + 1 < argc) {
                 options->laplace_smooth_layers = std::atoi(argv[++i]);
             }
             else {

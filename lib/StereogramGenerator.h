@@ -38,6 +38,9 @@ public:
             }
         }
 
+        mesh.normalizeAndCenter();
+
+
         std::cout << "Loaded triangles: " << mesh.m_num_triangles << "\n";
 
         // Apply transformations (scale, shear, rotate, translate) to the mesh
@@ -48,6 +51,7 @@ public:
             smoothSTL(mesh, options->laplace_smooth_layers);
         }
 
+
         // Compute the bounding box center and span (size of object in space)
         auto [center, span] = calculateMeshBounds(mesh.m_vectors.data(), mesh.m_num_triangles * 3);
 
@@ -56,8 +60,6 @@ public:
         float floor_size_x = span * 2.0f;       // Make floor wide enough
         float floor_size_y = span * 2.0f;
         addFloorMesh(mesh, center.x, center.y, floor_z, floor_size_x, floor_size_y);
-
-
 
         // Setup camera based on options and bounding box
         Camera cam = setupCamera(options, center, span);
@@ -225,11 +227,10 @@ private:
         std::cout << "Wrote stereogram: " << sirds_out << "\n";
     }
 
-
     // New helper : a bottom “floor strip” whose z varies with y(a ramp)
         static void addFloorMesh(
             stl & mesh, float cx, float cy, float cz,
-            float size_x, float size_y, float ramp_amount = 80.0,
+            float size_x, float size_y, float ramp_amount = 100,
             const glm::vec3 & color = { 0.8f,0.8f,0.8f })
     {
         // Build a strip that occupies the lower half in Y, and is closer near the bottom.
@@ -258,30 +259,4 @@ private:
         mesh.m_vectors.insert(mesh.m_vectors.end(), tris.begin(), tris.end());
         mesh.m_num_triangles += 2;
     }
-    // Add a rectangular floor mesh to the STL
-    static void addFloorMesh_1(stl& mesh, float center_x, float center_y, float floor_z, float size_x, float size_y, const glm::vec3& color = {0.8f, 0.8f, 0.8f})
-    {
-        // Four corners of the floor quad
-        glm::vec3 v0 = {center_x - size_x * 0.5f, center_y - size_y * 0.5f, floor_z};
-        glm::vec3 v1 = {center_x + size_x * 0.5f, center_y - size_y * 0.5f, floor_z};
-        glm::vec3 v2 = {center_x + size_x * 0.5f, center_y + size_y * 0.5f, floor_z};
-        glm::vec3 v3 = {center_x - size_x * 0.5f, center_y + size_y * 0.5f, floor_z};
-
-        // Two triangles: v0-v1-v2 and v0-v2-v3
-        std::vector<float> floor_triangles = {
-            v0.x, v0.y, v0.z,  v1.x, v1.y, v1.z,  v2.x, v2.y, v2.z,
-            v0.x, v0.y, v0.z,  v2.x, v2.y, v2.z,  v3.x, v3.y, v3.z
-        };
-
-        // Optionally add color (if mesh.m_rgb_color is used)
-        for (int i = 0; i < 6; ++i) {
-            mesh.m_rgb_color.push_back(color.r);
-            mesh.m_rgb_color.push_back(color.g);
-            mesh.m_rgb_color.push_back(color.b);
-        }
-
-        mesh.m_vectors.insert(mesh.m_vectors.end(), floor_triangles.begin(), floor_triangles.end());
-        mesh.m_num_triangles += 2;
-    }
-
 };
