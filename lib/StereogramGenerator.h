@@ -89,8 +89,6 @@ public:
             sirds_rgb, options->texture_brightness, options->texture_contrast,
             options->bg_separation, options);
 
-
-
         // Save stereogram image to disk
         saveStereogram(sirds_rgb, options);
 
@@ -116,7 +114,6 @@ private:
         v::scale(vdata, vcount, options->sc.x, options->sc.y, options->sc.z);
         v::shear_mesh(vdata, vcount, options->shear.x, options->shear.y, options->shear.z);
         v::rotateQuaternion(vdata, vcount, options->rot_deg.x, options->rot_deg.y, options->rot_deg.z, glm::vec3(0, 0, 0));
-
         v::translate(vdata, vcount, options->trans.x, options->trans.y, options->trans.z);
     }
 
@@ -228,10 +225,10 @@ private:
     }
 
     // New helper : a bottom “floor strip” whose z varies with y(a ramp)
-        static void addFloorMesh(
-            stl & mesh, float cx, float cy, float cz,
-            float size_x, float size_y, float ramp_amount = 100,
-            const glm::vec3 & color = { 0.8f,0.8f,0.8f })
+    static void addFloorMesh(
+        stl & mesh, float cx, float cy, float cz,
+        float size_x, float size_y, float ramp_amount = 100,
+        const glm::vec3 & color = { 0.8f,0.8f,0.8f })
     {
         // Build a strip that occupies the lower half in Y, and is closer near the bottom.
         float halfx = size_x * 0.5f;
@@ -242,13 +239,13 @@ private:
         float y1 = cy; // midline
 
         // z at bottom is closer (larger z), fades to farther (smaller z) at y1
-        float z_far = cz - 0.35f * size_y;          // farther (behind object some)
-        float z_near = z_far + ramp_amount;          // closer to camera
+        float z_far = cz - 0.35f * size_y;              // farther (behind object some)
+        float z_near = z_far + ramp_amount;             // closer to camera
 
-        glm::vec3 v0 = { cx - halfx, y0, z_near }; // bottom-left (closer)
-        glm::vec3 v1 = { cx + halfx, y0, z_near }; // bottom-right (closer)
-        glm::vec3 v2 = { cx + halfx, y1, z_far }; // mid-right   (farther)
-        glm::vec3 v3 = { cx - halfx, y1, z_far }; // mid-left    (farther)
+        glm::vec3 v0 = { cx - halfx, y0, z_near };      // bottom-left (closer)
+        glm::vec3 v1 = { cx + halfx, y0, z_near };      // bottom-right (closer)
+        glm::vec3 v2 = { cx + halfx, y1, z_far };       // mid-right   (farther)
+        glm::vec3 v3 = { cx - halfx, y1, z_far };       // mid-left    (farther)
 
         std::vector<float> tris = {
             v0.x,v0.y,v0.z,  v1.x,v1.y,v1.z,  v2.x,v2.y,v2.z,

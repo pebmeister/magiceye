@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <unordered_map>
 #include <queue>
+#include <cmath> // Added for pow and abs
 
 // Project-specific Headers
 #include "TextureSampler.h"
@@ -16,88 +17,74 @@
 
 /**
  * @class SIRDSGenerator
- * @brief Generates a Single Image Random Dot Stereogram (SIRDS) from a depth map.
+ * @brief A header-only library for generating Single Image Random Dot Stereograms (SIRDS) from a depth map.
  *
- * This class transforms a 2D grayscale depth map into a 3D stereoscopic image.
- * The primary method uses a Union-Find (Disjoint Set Union) data structure to
- * intelligently assign colors, creating the illusion of depth when viewed correctly.
+ * @details
+ * This class transforms a 2D grayscale depth map into a 3D stereoscopic image. The human brain
+ * perceives depth by correlating the patterns between the left and right eye views, which are
+ * horizontally offset according to the depth map.
+ *
+ * The core algorithm uses a Union-Find (Disjoint Set Union) data structure to intelligently link
+ * pixels that must share the same color to create a consistent pattern for each eye, ensuring
+ * the depth illusion is maintained.
+ *
+ * Key Features:
+ * - Depth-controlled pixel separation for stereoscopic effect.
+ * - Efficient Union-Find algorithm for robust, cycle-free linking.
+ * - Support for texture sampling or random color generation.
+ * - Color propagation for object consistency across scanlines.
+ * - Edge smoothing to reduce visual noise in foreground objects.
+ *
+ * Usage:
+ * 1. Prepare a depth map (`std::vector<float>`) where values range from 0.0 (far) to 1.0 (near).
+ * 2. Optionally, prepare a texture image for coloring.
+ * 3. Call `SIRDSGenerator::generate(...)` with the desired parameters.
+ * 4. The resulting 3-channel RGB image will be populated in the `out_rgb` vector.
+ *
+ * @note The output image is best viewed using the "parallel viewing" or "cross-eyed" method.
  */
 class SIRDSGenerator {
 public:
+    /// Shared pointer to the global options/configuration for the generator.
     static std::shared_ptr<Options> options;
 
 public:
     /// Enumeration of available algorithm methods for generating the SIRDS.
     enum class Method {
-        UnionFind,  ///< The primary, robust method using a Union-Find data structure.
-        Recursive   ///< Placeholder for a potential future implementation.
+        UnionFind,  ///< The primary, robust method using a Union-Find data structure. Efficient and prevents cycles.
+        Recursive   ///< [Placeholder] A potential alternative method. Not currently implemented.
     };
 
-private:
-    /**
-     * @class UnionFind
-     * @brief A simple implementation of the Union-Find (Disjoint Set Union) data structure.
-     *
-     * This is used to efficiently group pixels on a scanline that should share the same color
-     * to maintain stereoscopic consistency.
-     */
-    class UnionFind {
-    private:
-        std::vector<int> parent; ///< Tracks the parent/root of each element.
-
-    public:
-        /// Constructor initializes the structure for `n` elements.
-        UnionFind(int n = 0) { reset(n); }
-
-        /// Resets the structure for `n` elements, making each element its own parent.
-        void reset(int n)
-        {
-            parent.resize(n);
-            for (int i = 0; i < n; ++i) parent[i] = i;
-        }
-
-        /// Finds the root parent of element `x`, applying path compression for efficiency.
-        int find(int x)
-        {
-            return parent[x] == x ? x : (parent[x] = find(parent[x]));
-        }
-
-        /// Merges the sets containing elements `a` and `b`.
-        void unite(int a, int b)
-        {
-            a = find(a);
-            b = find(b);
-            if (a != b) parent[b] = a;
-        }
-    };
-
-public:
     /**
      * @brief Main public interface for generating a SIRDS image.
      *
-     * @param depth Input grayscale depth map. Higher values are closer (foreground).
-     * @param width Width of the output and depth map images.
-     * @param height Height of the output and depth map images.
+     * @param depth Input grayscale depth map. Values should be normalized [0.0, 1.0],
+     *              where 1.0 is closest (foreground) and 0.0 is farthest (background).
+     * @param width Width of the output image and the depth map.
+     * @param height Height of the output image and the depth map.
      * @param eye_separation The maximum horizontal separation between left/right eye points (in pixels).
+     *                       This controls the maximum perceived depth.
      * @param texture Optional texture image to color the output. If empty, random colors are used.
      * @param tw Width of the texture image.
      * @param th Height of the texture image.
-     * @param tchan Number of channels in the texture image (e.g., 3 for RGB).
-     * @param[out] out_rgb Output vector for the generated RGB image data (width * height * 3).
+     * @param tchan Number of channels in the texture image (e.g., 3 for RGB, 4 for RGBA).
+     * @param[out] out_rgb Output vector for the generated RGB image data. Will be resized to `width * height * 3`.
      * @param texture_brightness Brightness multiplier for the texture sampling.
      * @param texture_contrast Contrast adjustment for the texture sampling.
      * @param bg_separation Factor to scale depth values, controlling background separation.
-     * @param method The generation method to use. Currently only UnionFind is implemented.
+     *                      Higher values push the background further away.
+     * @param opt Shared pointer to the Options object containing algorithm parameters (e.g., thresholds, gamma).
+     * @param method The generation method to use. Currently only `Method::UnionFind` is implemented.
+     *               The parameter is retained for future compatibility.
      */
     static void generate(const std::vector<float>& depth, int width, int height,
         int eye_separation, const std::vector<uint8_t>& texture,
         int tw, int th, int tchan, std::vector<uint8_t>& out_rgb,
         float texture_brightness, float texture_contrast,
-        float bg_separation, const std::shared_ptr<Options>& opt)
+        float bg_separation, const std::shared_ptr<Options>& opt, Method method = Method::UnionFind)
     {
-        options = opt;
+        options = opt; // Set the global options for this generation run.
 
-        Method method = Method::UnionFind ;
         // For now, always use the proven UnionFind method.
         // The Recursive method can be implemented later when time permits.
         generateUnionFind(depth, width, height, eye_separation, texture,
@@ -106,11 +93,19 @@ public:
     }
 
     /**
-     * @brief Generates a SIRDS using the UnionFind algorithm.
+     * @brief Generates a SIRDS using the Union-Find algorithm.
      *
-     * This is the core implementation. It processes the image line-by-line (scanlines),
-     * using the depth map to determine how pixels should be linked and colored.
-     * For a detailed breakdown, see the comments for each helper function.
+     * @details
+     * This is the core implementation. It works in several stages:
+     * 1.  **Depth Adjustment:** Scales the input depth values.
+     * 2.  **Output Initialization:** Prepares the output buffer.
+     * 3.  **Separation Map Calculation:** Pre-computes how far each pixel's "right eye" counterpart should be.
+     * 4.  **Scanline Processing:** Processes each row of the image from top to bottom:
+     *     - **Build Unions:** Links pixels on the same row that must share a color.
+     *     - **Identify Roots:** Finds the representative for each group of linked pixels.
+     *     - **Assign Colors:** Gives a color to each root (propagating from neighbors or generating new ones).
+     *     - **Apply Colors:** Fills in the color for every pixel in the group based on its root.
+     * 5.  **Edge Smoothing:** Applies a filter to reduce noise on the edges of foreground objects.
      */
     static void generateUnionFind(const std::vector<float>& depth, int width, int height,
         int eye_separation, const std::vector<uint8_t>& texture,
@@ -125,7 +120,8 @@ public:
         out_rgb.assign(static_cast<size_t>(width) * height * 3, 0);
 
         // 3. Initialize a random number generator for creating random colors if no texture is provided.
-        std::mt19937 rng(123456); // Fixed seed for deterministic output
+        // A fixed seed ensures the same input always produces the same output, which is good for debugging.
+        std::mt19937 rng(123456);
         std::uniform_int_distribution<int> distr(0, 255);
 
         // 4. Pre-calculate the desired separation for every pixel based on its depth.
@@ -146,7 +142,52 @@ public:
     }
 
 private:
-    /// Scales the depth values to control the overall depth effect and background separation.
+    /**
+     * @class UnionFind
+     * @brief A simple, efficient implementation of the Union-Find (Disjoint Set Union) data structure.
+     *
+     * @details
+     * This internal class is used to group pixels on a single scanline that must share the same color.
+     * It provides two operations:
+     * - `find(x)`: Determines the root representative of the set containing element `x`.
+     * - `unite(a, b)`: Merges the sets containing elements `a` and `b`.
+     *
+     * Path compression is used in `find()` to keep the tree flat, ensuring near-constant time
+     * amortized complexity for these operations.
+     */
+    class UnionFind {
+    private:
+        std::vector<int> parent; ///< Tracks the parent of each element. The root of a set points to itself.
+
+    public:
+        /// Constructor initializes the structure for `n` elements, each in its own set.
+        UnionFind(int n = 0) { reset(n); }
+
+        /// Resets the structure for `n` elements, making each element its own parent.
+        void reset(int n)
+        {
+            parent.resize(n);
+            for (int i = 0; i < n; ++i) parent[i] = i;
+        }
+
+        /// Finds the root parent of element `x`, applying path compression for efficiency.
+        /// @return The root representative of the set containing `x`.
+        int find(int x)
+        {
+            return parent[x] == x ? x : (parent[x] = find(parent[x]));
+        }
+
+        /// Merges the sets containing elements `a` and `b`.
+        /// After this operation, `find(a)` will equal `find(b)`.
+        void unite(int a, int b)
+        {
+            a = find(a);
+            b = find(b);
+            if (a != b) parent[b] = a; // Attach the root of `b` to the root of `a`.
+        }
+    };
+
+    /// Scales depth values to control the overall depth effect and background separation.
     static std::vector<float> adjustDepthRange(const std::vector<float>& depth, float bg_separation)
     {
         std::vector<float> adjusted_depth(depth.size());
@@ -156,14 +197,7 @@ private:
         return adjusted_depth;
     }
 
-    /**
-     * @brief Calculates the desired pixel separation for each depth value.
-     *
-     * The separation determines how far apart the left-eye and right-eye points will be.
-     * Closer objects (higher depth) have a larger separation.
-     *
-     * @return A map where each value is the calculated separation for that pixel.
-     */
+    /// Calculates the horizontal separation (in pixels) for each pixel based on its depth.
     static std::vector<int> calculateSeparationMap(const std::vector<float>& adjusted_depth,
         int width, int height, int eye_separation)
     {
@@ -179,31 +213,22 @@ private:
                 float d = adjusted_depth[y * width + x]; // Current depth value
 
                 // Calculate a scale factor based on how far the depth is from the focus depth.
-                // This helps make objects pop out more or recede more sharply.
                 float t = pow(std::abs(d - focus_depth) * 2.0f, 1.5f);
                 float sep_scale = 1.0f + t * 0.5f;
 
                 // Core formula: separation increases as the object gets closer (1.0f - d).
                 float sep_float = min_separation + (max_separation - min_separation) *
-                    pow(1.0f - d, SIRDSGenerator::options->depth_gamma) * sep_scale;
+                    pow(1.0f - d, options->depth_gamma) * sep_scale;
 
                 // Clamp the final value to the valid range and store it.
-                separation_map[y * width + x] = std::max(min_separation,
-                    std::min(static_cast<int>(std::round(sep_float)), max_separation));
+                // BUG FIX: Corrected order of std::min and std::max arguments.
+                separation_map[y * width + x] = std::clamp(static_cast<int>(std::round(sep_float)), min_separation, max_separation);
             }
         }
         return separation_map;
     }
 
-    /**
-     * @brief Processes a single horizontal scanline (row) of the image.
-     *
-     * For a given row (y):
-     *  1. Resets and builds unions between pixels that must share a color.
-     *  2. Identifies the root pixel for each group of united pixels.
-     *  3. Assigns a color to each root pixel.
-     *  4. Applies the root's color to all pixels in its group for this scanline.
-     */
+    /// Processes a single horizontal scanline (row) of the image.
     static void processScanline(int y, int width, int height,
         const std::vector<float>& adjusted_depth,
         const std::vector<int>& separation_map,
@@ -226,16 +251,7 @@ private:
         applyColors(y, width, uf, rootColor, out_rgb);
     }
 
-    /**
-     * @brief Links pixels together on the current scanline based on depth and separation.
-     *
-     * For each pixel (x):
-     *  - Calculates a 'left' and 'right' position based on its separation value.
-     *  - Unites the current pixel with the pixel at the 'right' position. This ensures
-     *    the left eye sees the color at 'left' and the right eye sees the same color at 'right',
-     *    creating the depth illusion.
-     *  - Also links foreground pixels to their immediate neighbor to the left to smooth contours.
-     */
+    /// Links pixels together on the current scanline based on depth and separation.
     static void buildUnions(int y, int width, const std::vector<float>& adjusted_depth,
         const std::vector<int>& separation_map, UnionFind& uf)
     {
@@ -249,7 +265,7 @@ private:
             if (left >= 0 && right < width) {
                 float d = adjusted_depth[y * width + x];
                 // Link foreground pixels to their left neighbor for smoother edges.
-                if (d > SIRDSGenerator::options->foreground_threshold && x > 0) {
+                if (d > options->foreground_threshold && x > 0) {
                     uf.unite(x - 1, x);
                 }
                 // The crucial link: unite the left and right pixels to share the same color.
@@ -266,14 +282,7 @@ private:
         }
     }
 
-    /**
-     * @brief Assigns a color to each root pixel.
-     *
-     * For each root pixel, it first tries to propagate the color from a previously
-     * processed neighbor (left, above, or diagonal) to ensure color consistency across
-     * the object's surface. If no color can be propagated, it generates a new color
-     * either from the texture or randomly.
-     */
+    /// Assigns a color to each root pixel, prioritizing propagation from neighbors.
     static void assignColors(int y, int width, int height,
         const std::vector<float>& adjusted_depth,
         UnionFind& uf, const std::vector<bool>& is_root,
@@ -293,7 +302,7 @@ private:
             bool propagated = false;
 
             // For foreground objects, try to get color from a neighbor for consistency.
-            if (d > SIRDSGenerator::options->foreground_threshold) {
+            if (d > options->foreground_threshold) {
                 propagated = tryPropagateFromNeighbors(x, y, width, uf, is_root, rootColor, out_rgb, color);
             }
 
@@ -310,7 +319,7 @@ private:
         }
     }
 
-    /// Attempts to find a color for the current root from a nearby root that was already colored.
+    /// Attempts to find a color for the current root from a nearby, already-colored root.
     static bool tryPropagateFromNeighbors(int x, int y, int width, UnionFind& uf,
         const std::vector<bool>& is_root,
         const std::vector<std::array<uint8_t, 3>>& rootColor,
@@ -382,7 +391,7 @@ private:
                 static_cast<uint8_t>(distr(rng)) };
     }
 
-    /// For each pixel in the scanline, looks up its root's color and applies it.
+    /// Applies the root's color to all pixels in its group for this scanline.
     static void applyColors(int y, int width, UnionFind& uf,
         const std::vector<std::array<uint8_t, 3>>& rootColor,
         std::vector<uint8_t>& out_rgb)
@@ -396,17 +405,16 @@ private:
         }
     }
 
-    /// Applies a simple low-pass filter to foreground pixels to reduce visual noise ("jaggies").
+    /// Applies a simple low-pass filter to foreground pixels to reduce visual noise.
     static void applyEdgeSmoothing(const std::vector<float>& adjusted_depth,
         std::vector<uint8_t>& out_rgb, int width, int height)
     {
- 
         // Iterate through interior pixels (ignore the border for simplicity).
         for (int y = 1; y < height - 1; ++y) {
             for (int x = 1; x < width - 1; ++x) {
                 float d = adjusted_depth[y * width + x];
                 // Only smooth pixels that are in the foreground.
-                if (d > SIRDSGenerator::options->smoothThreshold) {
+                if (d > options->smoothThreshold) {
                     smoothPixel(x, y, width, out_rgb);
                 }
             }
@@ -418,7 +426,7 @@ private:
     {
         int idx = (y * width + x) * 3; // Index of the central pixel.
         for (int c = 0; c < 3; ++c) { // Process each color channel (R, G, B).
-            // Weighted sum: center pixel * 6, neighbors * 1.
+            // Sum of center pixel (weight 6) and 6 neighbors (weight 1 each) = total weight 12.
             int sum = out_rgb[idx + c] * 6;
             // Add the four cardinal neighbors
             sum += out_rgb[((y - 1) * width + x) * 3 + c]; // Up
@@ -429,9 +437,11 @@ private:
             sum += out_rgb[((y - 1) * width + (x - 1)) * 3 + c]; // Up-Left
             sum += out_rgb[((y + 1) * width + (x + 1)) * 3 + c]; // Down-Right
 
-            out_rgb[idx + c] = sum / options->smoothWeight; // Divide by total weight (6 + 1 + 1 + 1 + 1 + 1 + 1 = 12? 10 is used, a specific tuning).
+            out_rgb[idx + c] = static_cast<uint8_t>(sum / options->smoothWeight);
         }
     }
 };
 
-std::shared_ptr<Options> SIRDSGenerator::options;
+// Definition and initialization of the static class member.
+// 'inline' is required in C++17 to avoid One Definition Rule (ODR) violations in header-only libraries.
+inline std::shared_ptr<Options> SIRDSGenerator::options = nullptr;

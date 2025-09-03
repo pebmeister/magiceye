@@ -14,9 +14,7 @@ public:
         if (!array || vcount == 0) return;
 
         // Construct quaternion from Euler angles
-        glm::quat rotation = glm::quat(glm::vec3(glm::radians(xrot_deg),
-                                             glm::radians(yrot_deg),
-                                             glm::radians(zrot_deg)));
+        glm::quat rotation = glm::quat(glm::vec3(glm::radians(xrot_deg), glm::radians(yrot_deg), glm::radians(zrot_deg)));
 
         // Build transformation matrix
         glm::mat4 toOrigin = glm::translate(glm::mat4(1.0f), -origin);
