@@ -2,6 +2,7 @@
 #pragma once
 #include <stl.h>
 #include <iostream>
+#include <exception>
 
 #include "Camera.h"
 #include "DepthMapGenerator.h"
@@ -18,22 +19,24 @@
 
 class StereogramGenerator {
 public:
+
+    StereogramGenerator(std::shared_ptr<Options>& opt) : options(opt) {}
+
     // Main entry point for creating a stereogram
-    static int create(const std::shared_ptr<Options>& options)
+    int create()
     {
         stl mesh;
         if (options->stlpath.ends_with(".obj")) {
             // convert OBJ to stl
             if (!OBJToSTL::convert(options->stlpath, mesh)) {
-                std::cerr << "Failed to read OBJ: " << options->stlpath << "\n";
+                throw std::runtime_error("Failed to read OBJ: " + options->stlpath);
                 return 1;
             }
         }
         else {
             // Load STL mesh from file
             if (mesh.read_stl(options->stlpath.c_str()) != 0) {
-                std::cerr << "Failed to read STL: " << options->stlpath << "\n";
-
+                throw std::runtime_error("Failed to read stl: " + options->stlpath);
                 return 1;
             }
         }
@@ -73,7 +76,6 @@ public:
             options->depth_near, options->depth_far,
             options->bg_separation);
 
-
         std::cout << "Depth zmin=" << zmin << " zmax=" << zmax << "\n";
 
         // Save grayscale visualization of depth map for debugging
@@ -96,6 +98,8 @@ public:
     }
 
 private:
+    std::shared_ptr<Options> options;
+
     // Structure for holding texture data
     struct TextureData {
         std::vector<uint8_t> texture;  // Raw pixel data
@@ -106,7 +110,7 @@ private:
     };
 
     // Apply transformations from options to mesh vertices
-    static void transformMesh(stl& mesh, const std::shared_ptr<Options>& options)
+    void transformMesh(stl& mesh, const std::shared_ptr<Options>& options)
     {
         float* vdata = mesh.m_vectors.data();
         size_t vcount = static_cast<size_t>(mesh.m_num_triangles) * 3;
@@ -118,7 +122,7 @@ private:
     }
 
     // Compute mesh bounds → returns center and largest span (size in 3D space)
-    static std::pair<glm::vec3, float> calculateMeshBounds(const float* vdata, size_t vcount)
+    std::pair<glm::vec3, float> calculateMeshBounds(const float* vdata, size_t vcount)
     {
         float minx = 1e9f, miny = 1e9f, minz = 1e9f;
         float maxx = -1e9f, maxy = -1e9f, maxz = -1e9f;
@@ -135,7 +139,7 @@ private:
     }
 
     // Setup camera parameters from options (position, look-at, projection)
-    static Camera setupCamera(const std::shared_ptr<Options>& options, const glm::vec3& center, float span)
+    Camera setupCamera(const std::shared_ptr<Options>& options, const glm::vec3& center, float span)
     {
         Camera cam;
         cam.up = { 0, 1, 0 };
@@ -162,7 +166,7 @@ private:
     }
 
     // Compute orthographic projection scale based on options and bounding box span
-    static float calculateOrthoScale(const std::shared_ptr<Options>& options, float span)
+    float calculateOrthoScale(const std::shared_ptr<Options>& options, float span)
     {
         if (options->custom_orth_scale_provided) {
             return options->custom_orth_scale;
@@ -175,7 +179,7 @@ private:
     }
 
     // Save depth map visualization as grayscale PNG
-    static void saveDepthVisualization(const std::vector<float>& depth, const std::shared_ptr<Options>& options)
+    void saveDepthVisualization(const std::vector<float>& depth, const std::shared_ptr<Options>& options)
     {
         std::vector<uint8_t> depth_vis(options->width * options->height * 3);
         for (int i = 0; i < options->width * options->height; ++i) {
@@ -192,7 +196,7 @@ private:
     }
 
     // Load texture from file if provided, otherwise fallback to random dots
-    static TextureData loadTexture(const std::shared_ptr<Options>& options)
+    TextureData loadTexture(const std::shared_ptr<Options>& options)
     {
         TextureData data;
 
@@ -204,8 +208,7 @@ private:
                     << data.tw << "x" << data.th << " ch=" << data.tchan << ")\n";
             }
             else {
-                std::cout << "Failed to load texture '" << options->texpath
-                    << "'. Falling back to random dots.\n";
+                throw std::runtime_error("Failed to load texture '" + options->texpath + "'");
             }
         }
         else {
@@ -216,7 +219,7 @@ private:
     }
 
     // Save final stereogram (SIRDS) image as PNG
-    static void saveStereogram(const std::vector<uint8_t>& sirds_rgb, const std::shared_ptr<Options>& options)
+    void saveStereogram(const std::vector<uint8_t>& sirds_rgb, const std::shared_ptr<Options>& options)
     {
         std::string sirds_out = options->outprefix + "_sirds.png";
         stbi_write_png(sirds_out.c_str(), options->width, options->height, 3,
@@ -225,7 +228,7 @@ private:
     }
 
     // New helper : a bottom “floor strip” whose z varies with y(a ramp)
-    static void addFloorMesh(
+    void addFloorMesh(
         stl & mesh, float cx, float cy, float cz,
         float size_x, float size_y, float ramp_amount = 100,
         const glm::vec3 & color = { 0.8f,0.8f,0.8f })

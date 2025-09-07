@@ -1,4 +1,5 @@
 #pragma once
+#include <exception>
 #include "Options.h"
 
 class ParseArgs {
@@ -18,7 +19,7 @@ private:
         char comma;
         ss >> v.x >> comma >> v.y >> comma >> v.z;
         if (ss.fail()) {
-            std::cerr << "Warning: Invalid vector format '" << str << "'. Using (0,0,0)\n";
+            throw std::invalid_argument("Warning: Invalid vector format '" + str + "'.");
         }
         return v;
     }
@@ -140,8 +141,7 @@ public:
                 options->laplace_smooth_layers = std::atoi(argv[++i]);
             }
             else {
-                std::cerr << "Unknown or incomplete option: " << arg << "\n";
-                return false;
+                throw std::invalid_argument("Unknown or incomplete option: " + arg);
             }
         }
 

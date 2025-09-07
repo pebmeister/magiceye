@@ -78,8 +78,8 @@ static void updateSTLFromMesh(stl& model,
 
 // --- Main smoothing wrapper ---
 void smoothSTL(stl& model,
-    int iterations = 20,
-    bool useTaubin = true)
+    int iterations,
+    bool useTaubin = true) 
 {
     std::vector<vec3> V;
     std::vector<Tri> F;

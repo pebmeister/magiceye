@@ -8,16 +8,11 @@
 #include <atomic>
 #include "Options.h"
 #include "StereogramGenerator.h"
+#include "logger.h"
 
 #pragma warning(disable:4996)
 
 namespace fs = std::filesystem;
-
-// Your test data structure
-struct TestRunData {
-    std::string imagePath;
-    Options options;
-};
 
 // Add this to your test file
 struct TestConfig {
@@ -51,75 +46,16 @@ public:
         std::cout << "Global test teardown - writing test log\n";
         writeTestLog();
     }
-
+    
     static void writeTestLog()
     {
-        std::ofstream logFile("test_run_log.xml");        
-        logFile 
-            << "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-            << "<TestRunDatas>\n";
-        for (const auto& data : globalTestData) {
-            logFile
-                << "   <TestRunData>\n"
-                << "      <imagePath>" << data.imagePath << "</imagePath>\n"
-                << "      <stlpath>" << data.options.stlpath << "</stlpath>\n"
-                << "      <texpath>" << data.options.texpath << "</texpath>\n"
-                << "      <outprefix>" << data.options.outprefix << "</outprefix>\n"
-                << "      <width>" << data.options.width << "</width>\n"
-                << "      <height>" << data.options.height << "</height>\n"
-                << "      <eye_sep>" << data.options.eye_sep << "</eye_sep>\n"
-                << "      <perspective_flag>" << data.options.perspective_flag << "</perspective_flag>\n"
-                << "      <custom_cam_pos>\n"
-                << "         <x>" << data.options.custom_cam_pos[0] << "</x>\n"
-                << "         <y>" << data.options.custom_cam_pos[1] << "</y>\n"
-                << "         <z>" << data.options.custom_cam_pos[2] << "</z>\n"
-                << "      </custom_cam_pos>\n"
-                << "      <custom_look_at>\n"
-                << "         <x>" << data.options.custom_look_at[0] << "</x>\n"
-                << "         <y>" << data.options.custom_look_at[1] << "</y>\n"
-                << "         <z>" << data.options.custom_look_at[2] << "</z>\n"
-                << "      </custom_look_at>\n"
-                << "      <rot_deg>\n"
-                << "         <x>" << data.options.rot_deg[0] << "</x>\n"
-                << "         <y>" << data.options.rot_deg[1] << "</y>\n"
-                << "         <z>" << data.options.rot_deg[2] << "</z>\n"
-                << "      </rot_deg>\n"
-                << "      <trans>\n"
-                << "         <x>" << data.options.trans[0] << "</x>\n"
-                << "         <y>" << data.options.trans[1] << "</y>\n"
-                << "         <z>" << data.options.trans[2] << "</z>\n"
-                << "      </trans>\n"
-                << "      <sc>\n"
-                << "         <x>" << data.options.sc[0] << "</x>\n"
-                << "         <y>" << data.options.sc[1] << "</y>\n"
-                << "         <z>" << data.options.sc[2] << "</z>\n"
-                << "      </sc>\n"
-                << "      <shear>\n"
-                << "         <x>" << data.options.shear[0] << "</x>\n"
-                << "         <y>" << data.options.shear[1] << "</y>\n"
-                << "         <z>" << data.options.shear[2] << "</z>\n"
-                << "      </shear>\n"
-                << "      <custom_orth_scale>" << data.options.custom_orth_scale << "</custom_orth_scale>\n"
-                << "      <custom_cam_provided>" << data.options.custom_cam_provided << "</custom_cam_provided>\n"
-                << "      <custom_lookat_provided>" << data.options.custom_lookat_provided << "</custom_lookat_provided>\n"
-                << "      <custom_orth_scale_provided>" << data.options.custom_orth_scale_provided << "</custom_orth_scale_provided>\n"
-                << "      <fov>" << data.options.fov << "</fov>\n"
-                << "      <depth_near>" << data.options.depth_near << "</depth_near>\n"
-                << "      <depth_far>" << data.options.depth_far << "</depth_far>\n"
-                << "      <texture_brightness>" << data.options.texture_brightness << "</texture_brightness>\n"
-                << "      <texture_contrast>" << data.options.texture_contrast << "</texture_contrast>\n"
-                << "      <bg_separation>" << data.options.bg_separation << "</bg_separation>\n"
-                << "      <depth_gamma>" << data.options.depth_gamma << "</depth_gamma>\n"
-                << "      <orthTuneLow>" << data.options.orthTuneLow << "</orthTuneLow>\n"
-                << "      <orthTuneHi>" << data.options.orthTuneHi << "</orthTuneHi>\n"
-                << "     <foreground_threshold>" << data.options.foreground_threshold << "</foreground_threshold>\n"
-                << "     <smoothThreshold>" << data.options.smoothThreshold << "</smoothThreshold>\n"
-                << "   </TestRunData>\n";
-        }
-        logFile << "</TestRunDatas>\n";
-        logFile.close();
+        logger log;
+
+        std::ofstream logfile("test_run_log.html");
+        log.log(logfile, globalTestData);
         std::cout << "Logged " << globalTestData.size() << " test runs to test_run_log.xml\n";
     }
+
 
     static void addTestData(const TestRunData& data)
     {
@@ -299,11 +235,15 @@ static void testFovVariations()
                     config.options.stlpath = stlpath;
                     config.options.texpath = texturepath;
                     config.options.outprefix = unittestpath + "out\\fov\\" + GetTestName();
-                    auto result = StereogramGenerator::create(std::make_shared<Options>(config.options));
+
+                    auto options = std::make_shared<Options>(config.options);
+                    StereogramGenerator st(options);
+                    auto result = st.create();
 
                     // Log the test run data
                     TestRunData data;
                     data.imagePath = config.options.outprefix + "_sirds.png";
+                    data.depthPath = config.options.outprefix + "_depth.png";
                     data.options = config.options;
                     GlobalTestEnvironment::addTestData(data);
 
@@ -344,11 +284,15 @@ static void testDepthVariations()
                         config.options.stlpath = stlpath;
                         config.options.texpath = texturepath;
                         config.options.outprefix = unittestpath + "out\\depth\\" + GetTestName();
-                        auto result = StereogramGenerator::create(std::make_shared<Options>(config.options));
+                        
+                        auto options = std::make_shared<Options>(config.options);
+                        StereogramGenerator st(options);
+                        auto result = st.create();
 
                         // Log the test run data
                         TestRunData data;
                         data.imagePath = config.options.outprefix + "_sirds.png";
+                        data.depthPath = config.options.outprefix + "_depth.png";
                         data.options = config.options;
                         GlobalTestEnvironment::addTestData(data);
 
@@ -386,11 +330,16 @@ static void testEyeSeparationVariations()
                     config.options.stlpath = stlpath;
                     config.options.texpath = texturepath;
                     config.options.outprefix = unittestpath + "out\\eyesep\\" + GetTestName();
-                    auto result = StereogramGenerator::create(std::make_shared<Options>(config.options));
+
+
+                    auto options = std::make_shared<Options>(config.options);
+                    StereogramGenerator st(options);
+                    auto result = st.create();
 
                     // Log the test run data
                     TestRunData data;
                     data.imagePath = config.options.outprefix + "_sirds.png";
+                    data.depthPath = config.options.outprefix + "_depth.png";
                     data.options = config.options;
                     GlobalTestEnvironment::addTestData(data);
                     EXPECT_EQ(result, 0);
@@ -413,11 +362,15 @@ TEST_P(StereogramTest, GenerateImage)
     config.options.stlpath = stl_file;
     config.options.texpath = texture_file;
     config.options.outprefix = unittestpath + "out\\generateImage\\" + GetTestName();
-    auto result = StereogramGenerator::create(std::make_shared<Options>(config.options));
+
+    auto options = std::make_shared<Options>(config.options);
+    StereogramGenerator st(options);
+    auto result = st.create();
 
     // Log the test run data
     TestRunData data;
     data.imagePath = config.options.outprefix + "_sirds.png";
+    data.depthPath = config.options.outprefix + "_depth.png";
     data.options = config.options;
     GlobalTestEnvironment::addTestData(data);
 
@@ -455,11 +408,15 @@ TEST(stl_test, representative_tests)
                 config.options.stlpath = stlpath;
                 config.options.texpath = texturepath;
                 config.options.outprefix = unittestpath + "out\\representative\\" + GetTestName();
-                auto result = StereogramGenerator::create(std::make_shared<Options>(config.options));
+
+                auto options = std::make_shared<Options>(config.options);
+                StereogramGenerator st(options);
+                auto result = st.create();
 
                 // Log the test run data
                 TestRunData data;
                 data.imagePath = config.options.outprefix + "_sirds.png";
+                data.depthPath = config.options.outprefix + "_depth.png";
                 data.options = config.options;
                 GlobalTestEnvironment::addTestData(data);
 
@@ -473,8 +430,8 @@ TEST(stl_test, smoke_test)
 {
     // Quick test to ensure basic functionality
     
-    Options options;
-    setupBasicOptions(options);
+    Options config;
+    setupBasicOptions(config);
 
     std::filesystem::create_directory(unittestpath + "out\\");
     std::filesystem::create_directory(unittestpath + "out\\smoke\\");
@@ -485,17 +442,21 @@ TEST(stl_test, smoke_test)
     auto representative_stl = selectRepresentativeFiles(stl_files, 2);          // Pick diverse STLs
     auto representative_textures = selectRepresentativeFiles(texture_files, 1); // Pick textures
 
-    options.stlpath = representative_stl[0];
-    options.texpath = representative_textures[0];
+    config.stlpath = representative_stl[0];
+    config.texpath = representative_textures[0];
 
-    options.outprefix = unittestpath + "out\\smoke\\" + GetTestName();
+    config.outprefix = unittestpath + "out\\smoke\\" + GetTestName();
     std::filesystem::create_directory(unittestpath + "out\\smoke\\");
-    auto result = StereogramGenerator::create(std::make_shared<Options>(options));
+
+    auto options = std::make_shared<Options>(config);
+    StereogramGenerator st(options);
+    auto result = st.create();
 
     // Log the test run data
     TestRunData data;
-    data.imagePath = options.outprefix + "_sirds.png";
-    data.options = options;
+    data.imagePath = options->outprefix + "_sirds.png";
+    data.depthPath = options->outprefix + "_depth.png";
+    data.options = config;
     GlobalTestEnvironment::addTestData(data);
 
     EXPECT_EQ(result, 0);
