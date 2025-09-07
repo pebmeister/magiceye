@@ -422,3 +422,5 @@ FodyWeavers.xsd
 /texture/kIRK.jpg
 /media
 /texture
+/unittests/stl
+/unittests/texture
