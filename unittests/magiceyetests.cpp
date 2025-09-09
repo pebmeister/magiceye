@@ -113,18 +113,18 @@ static void iterateRecursive(const std::string& path, std::vector<fs::path>& fil
 
 static void setupBasicOptions(Options& options)
 {
-    options.sc = { -2.0, -1.0, -1.5 };
+    options.sc = { -1.0, -1.0, -1.0 };
     options.rot_deg = { 100, 20, 0 };
     options.fov = 27;
     options.depth_near = .72;
     options.depth_far = .05;
     options.eye_sep = 160;
-    options.texture_brightness = 1.2;
+    options.texture_brightness = 1.0;
     options.texture_contrast = 1.0;
-    options.bg_separation = .4;
+    options.bg_separation = .6;
     options.height = 800;
     options.width = 1200;
-    options.shear = { .12, .12, .1 };
+    options.shear = { 0, 0, 0 };
     options.depth_gamma = 1.01;
 }
 
@@ -158,7 +158,7 @@ std::vector<TestConfig> generateTestConfigs()
 
     // Base configuration
     Options base;
-    base.sc = { -2.0, -1.0, -1.5 };
+    base.sc = { -1.0, -1.0, -1.0 };
     base.rot_deg = { 100, 20, 0 };
     base.fov = 27;
     base.depth_near = .72;
@@ -166,10 +166,10 @@ std::vector<TestConfig> generateTestConfigs()
     base.eye_sep = 180;
     base.texture_brightness = .8;
     base.texture_contrast = 1.0;
-    base.bg_separation = .4;
+    base.bg_separation = .6;
     base.height = 800;
     base.width = 1200;
-    base.shear = { .12, .12, .1 };
+    base.shear = { 0, 0, 0 };
     base.depth_gamma = 1.0;
 
     // Critical parameter variations
@@ -400,7 +400,6 @@ TEST(stl_test, representative_tests)
     std::filesystem::create_directory(unittestpath + "out\\");
     std::filesystem::create_directory(unittestpath + "out\\representative\\");
 
-    auto n = 1;
     for (auto& stlpath : representative_stl) {
         for (auto& texturepath : representative_textures) {
             for (auto& config : test_configs) {
@@ -440,26 +439,28 @@ TEST(stl_test, smoke_test)
     auto texture_files = generateTextureFiles();
 
     auto representative_stl = selectRepresentativeFiles(stl_files, 2);          // Pick diverse STLs
-    auto representative_textures = selectRepresentativeFiles(texture_files, 1); // Pick textures
+    auto representative_textures = selectRepresentativeFiles(texture_files, 2); // Pick textures
 
-    config.stlpath = representative_stl[0];
-    config.texpath = representative_textures[0];
+    for (auto& stlpath : representative_stl) {
+        for (auto& texturepath : representative_textures) {
+            config.outprefix = unittestpath + "out\\smoke\\" + GetTestName();
+            auto options = std::make_shared<Options>(config);
+            options->stlpath = stlpath;
+            options->texpath = texturepath;
+            StereogramGenerator st(options);
+            auto result = st.create();
 
-    config.outprefix = unittestpath + "out\\smoke\\" + GetTestName();
-    std::filesystem::create_directory(unittestpath + "out\\smoke\\");
+            // Log the test run data
+            TestRunData data;
+            data.imagePath = options->outprefix + "_sirds.png";
+            data.depthPath = options->outprefix + "_depth.png";
+            data.options = config;
+            GlobalTestEnvironment::addTestData(data);
 
-    auto options = std::make_shared<Options>(config);
-    StereogramGenerator st(options);
-    auto result = st.create();
+            EXPECT_EQ(result, 0);
+        }
+    }
 
-    // Log the test run data
-    TestRunData data;
-    data.imagePath = options->outprefix + "_sirds.png";
-    data.depthPath = options->outprefix + "_depth.png";
-    data.options = config;
-    GlobalTestEnvironment::addTestData(data);
-
-    EXPECT_EQ(result, 0);
 }
 
 TEST(stl_test, focused_parameter_studies)

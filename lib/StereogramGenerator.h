@@ -30,14 +30,12 @@ public:
             // convert OBJ to stl
             if (!OBJToSTL::convert(options->stlpath, mesh)) {
                 throw std::runtime_error("Failed to read OBJ: " + options->stlpath);
-                return 1;
             }
         }
         else {
             // Load STL mesh from file
             if (mesh.read_stl(options->stlpath.c_str()) != 0) {
                 throw std::runtime_error("Failed to read stl: " + options->stlpath);
-                return 1;
             }
         }
 
@@ -52,7 +50,6 @@ public:
         if (options->laplace_smoothing) {
             smoothSTL(mesh, options->laplace_smooth_layers);
         }
-
 
         // Compute the bounding box center and span (size of object in space)
         auto [center, span] = calculateMeshBounds(mesh.m_vectors.data(), mesh.m_num_triangles * 3);
