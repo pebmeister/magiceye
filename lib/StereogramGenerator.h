@@ -56,9 +56,9 @@ public:
 
         // Example: Add a floor at the bottom of the mesh bounding box
         float floor_z = center.z - span * 0.5f; // Place floor below the object
-        float floor_size_x = span * 2.0f;       // Make floor wide enough
-        float floor_size_y = span * 2.0f;
-        addFloorMesh(mesh, center.x, center.y, floor_z, floor_size_x, floor_size_y);
+        float floor_size_x = span * options->rampWidth; // Make floor wide
+        float floor_size_y = span * options->rampWidth; //
+        addFloorMesh(mesh, center.x, center.y, floor_z, floor_size_x, floor_size_y, options->rampHeight);
 
         // Setup camera based on options and bounding box
         Camera cam = setupCamera(options, center, span);
@@ -227,7 +227,7 @@ private:
     // New helper : a bottom “floor strip” whose z varies with y(a ramp)
     void addFloorMesh(
         stl & mesh, float cx, float cy, float cz,
-        float size_x, float size_y, float ramp_amount = 100,
+        float size_x, float size_y, float ramp_amount,
         const glm::vec3 & color = { 0.8f,0.8f,0.8f })
     {
         // Build a strip that occupies the lower half in Y, and is closer near the bottom.

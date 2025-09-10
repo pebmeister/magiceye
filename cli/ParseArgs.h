@@ -59,6 +59,8 @@ private:
         std::cerr << "  -sweight weight      : Smooth weigth (default: "  << options.smoothWeight << ")\n";
         std::cerr << "  -laplace             : Enable Laplace mesh smoothing (default: " << options.laplace_smoothing << ")\n";
         std::cerr << "  -laplacelayers       : Laplace smooth layers (if laplace enabled default: " << options.laplace_smooth_layers << ")\n";
+        std::cerr << "  -rwidth              : Ramp width (default: " << options.rampWidth << ")\n";
+        std::cerr << "  -rheight             : Ramp height (default: " << options.rampHeight << ")\n";
     }
 
 public:
@@ -147,6 +149,12 @@ public:
             }
             else if (arg == "-laplacelayers" && i + 1 < argc) {
                 options->laplace_smooth_layers = std::atoi(argv[++i]);
+            }
+            else if (arg == "-rwidth" && i + 1 < argc) {
+                options->rampWidth = parseFloat(argv[++i]);
+            }
+            else if (arg == "-rheight" && i + 1 < argc) {
+                options->rampHeight = parseFloat(argv[++i]);
             }
             else {
                 printhelp();

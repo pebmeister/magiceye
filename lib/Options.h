@@ -55,5 +55,7 @@ public:
     float foreground_threshold = 0.90f;
     float smoothThreshold = 0.75;
     float smoothWeight = 10;
+    float rampWidth = 2.5;
+    float rampHeight = 100.0;
     int laplace_smooth_layers = 15;
 };
