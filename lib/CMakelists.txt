@@ -17,6 +17,8 @@ target_sources(magic_eye_lib INTERFACE
     Camera.h
     DepthMapGenerator.h
     Laplace.h
+    logger.h
+    objtostl.h
     Options.h
     SIRDSGenerator.h
     StereogramGenerator.h

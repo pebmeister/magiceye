@@ -17,7 +17,7 @@ public:
     bool perspective;
 
     Camera() : position(0, 0, 0), look_at(0, 0, 0), up(0, 1, 0),
-        fov_deg(defaultFov), perspective(true)
+        fov_deg(45), perspective(true)
     {
     }
 

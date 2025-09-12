@@ -13,13 +13,7 @@
 
 using v = vectorutils;
 
-constexpr int defaultWidth = 1200;
-constexpr int defaultHeight = 800;
-constexpr int defaultEyeSep = 100;
-constexpr float defaultFov = 45.0f;
 constexpr float tolerance = 1e-6f;
-constexpr float defaultOrthTuneLow = 0.6f;
-constexpr float defaultOrthTuneHi = 1.2f;
 
 #include "Camera.h"
 
@@ -28,9 +22,9 @@ public:
     std::string stlpath = "";
     std::string texpath = "";
     std::string outprefix = "out";
-    int width = defaultWidth;
-    int height = defaultHeight;
-    int eye_sep = defaultEyeSep;
+    int width = 1200;
+    int height = 800;
+    int eye_sep = 160;
     int perspective_flag = 1;
     glm::vec3 custom_cam_pos = { 0, 0, 0 };
     glm::vec3 custom_look_at = { 0, 0, 0 };
@@ -43,15 +37,15 @@ public:
     bool custom_orth_scale_provided = false;
     bool laplace_smoothing = false;
     float custom_orth_scale = 1;
-    float fov = defaultFov;
+    float fov = 45;
     float depth_near = 0.75f;
     float depth_far = 0.1f;
     float texture_brightness = 1.0f;
     float texture_contrast = 1.0f;
     float bg_separation = 0.6f;
-    float depth_gamma = 0.95f;
-    float orthTuneLow = defaultOrthTuneLow;
-    float orthTuneHi = defaultOrthTuneHi;
+    float depth_gamma = 1.0f;
+    float orthTuneLow = 0.6f;
+    float orthTuneHi = 1.2f;
     float foreground_threshold = 0.90f;
     float smoothThreshold = 0.75;
     float smoothWeight = 10;
