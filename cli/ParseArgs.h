@@ -12,6 +12,14 @@ private:
         return out;
     }
 
+    static bool parseBool(const std::string& str)
+    {
+        bool out;
+        std::stringstream ss(str);
+        ss >> out;
+        return out;
+    }
+
     static glm::vec3 parseVec3(const std::string& str)
     {
         std::stringstream ss(str);
@@ -34,7 +42,7 @@ private:
         std::cerr << "  -h height            : Output height (default: " << options.height << ")\n";
         std::cerr << "  -sep eye_sep         : Eye separation in pixels (default: " << options.eye_sep << ")\n";
         std::cerr << "  -fov fov_deg         : Field of view in degrees (default: " << options.fov << ")\n";
-        std::cerr << "  -persp 0|1           : 1 for perspective, 0 for orthographic (default: " << options.perspective_flag << ")\n";
+        std::cerr << "  -persp true|false    : true for perspective, false for orthographic (default: " << options.perspective << ")\n";
         std::cerr << "  -cam x,y,z           : Camera position (default: auto)\n";
         std::cerr << "  -look x,y,z          : Look-at point (default: auto)\n";
         std::cerr << "  -rot x,y,z           : Rotate model (degrees, XYZ order default: " 
@@ -89,7 +97,7 @@ public:
                 options->fov = parseFloat(argv[++i]);
             }
             else if (arg == "-persp" && i + 1 < argc) {
-                options->perspective_flag = std::atoi(argv[++i]);
+                options->perspective = parseBool(argv[++i]);
             }
             else if (arg == "-cam" && i + 1 < argc) {
                 options->custom_cam_pos = parseVec3(argv[++i]);

@@ -25,7 +25,6 @@ public:
     int width = 1200;
     int height = 800;
     int eye_sep = 160;
-    int perspective_flag = 1;
     glm::vec3 custom_cam_pos = { 0, 0, 0 };
     glm::vec3 custom_look_at = { 0, 0, 0 };
     glm::vec3 rot_deg = { 0, 0, 0 };
@@ -36,6 +35,7 @@ public:
     bool custom_lookat_provided = false;
     bool custom_orth_scale_provided = false;
     bool laplace_smoothing = false;
+    bool perspective = true;
     float custom_orth_scale = 1;
     float fov = 45;
     float depth_near = 0.75f;

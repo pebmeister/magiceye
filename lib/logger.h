@@ -139,7 +139,7 @@ public:
                 R"(    <td class="number"> )" << data.options.width << "</td>\n" <<
                 R"(    <td class="number"> )" << data.options.height << "</td>\n" <<
                 R"(    <td class="number"> )" << data.options.eye_sep << "</td>\n" <<
-                R"(    <td class="number"> )" << data.options.perspective_flag << "</td>\n" <<
+                R"(    <td class="number"> )" << data.options.perspective << "</td>\n" <<
                 R"(    <td class="number"> )" << data.options.custom_cam_pos[0] << "</td>\n" <<
                 R"(    <td class="number"> )" << data.options.custom_cam_pos[1] << "</td>\n" <<
                 R"(    <td class="number"> )" << data.options.custom_cam_pos[2] << "</td>\n" <<

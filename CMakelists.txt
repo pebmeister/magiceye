@@ -38,6 +38,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
+# --- Fetch imgui libraries ---
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(imgui)
+
+
 # --- Create STL library here in root since it depends on FetchContent ---
 add_library(stl_lib
     ${pebmeister_stl_SOURCE_DIR}/stl.cpp

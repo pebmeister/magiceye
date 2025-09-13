@@ -140,7 +140,7 @@ private:
     {
         Camera cam;
         cam.up = { 0, 1, 0 };
-        cam.perspective = (options->perspective_flag != 0);
+        cam.perspective = (options->perspective);
         cam.fov_deg = options->fov;
 
         // Camera position
