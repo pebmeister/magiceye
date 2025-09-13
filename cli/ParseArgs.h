@@ -1,5 +1,6 @@
 #pragma once
 #include <exception>
+#include <memory>
 #include "Options.h"
 
 class ParseArgs {
