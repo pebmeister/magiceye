@@ -425,3 +425,4 @@ FodyWeavers.xsd
 /unittests/stl
 /unittests/texture
 /Linux
+/imgui.ini

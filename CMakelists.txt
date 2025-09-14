@@ -46,6 +46,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imgui)
 
+# --- Fetch GLFW ---
+FetchContent_Declare(
+    glfw
+    GIT_REPOSITORY https://github.com/glfw/glfw.git
+    GIT_TAG 3.3.8
+)
+FetchContent_MakeAvailable(glfw)
 
 # --- Create STL library here in root since it depends on FetchContent ---
 add_library(stl_lib
@@ -58,7 +65,19 @@ target_include_directories(stl_lib PUBLIC
     ${obj_SOURCE_DIR}/include
 )
 
+# --- Create imgui library ---
+add_library(imgui STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+)
+
+target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
+
 # --- Add subdirectories ---
 add_subdirectory(lib)
 add_subdirectory(cli)
 add_subdirectory(unittests)
+add_subdirectory(gui)   # We are adding a new gui subdirectory
