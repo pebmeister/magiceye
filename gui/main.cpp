@@ -17,6 +17,9 @@
 #endif
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
 
+#include <filesystem>
+
+
 // [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
 // To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
 // Your own project should not be affected, as you are likely to link with a newer binary of GLFW that is adequate for your version of Visual Studio.
@@ -28,6 +31,13 @@
 #ifdef __EMSCRIPTEN__
 #include "../libs/emscripten/emscripten_mainloop_stub.h"
 #endif
+
+#include "Options.h"
+#include "openfile.h"
+
+namespace fs = std::filesystem;
+
+
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -72,7 +82,7 @@ int main(int, char**)
     
     // Create window with graphics context
     float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor()); // Valid on GLFW 3.3+ only
-    GLFWwindow* window = glfwCreateWindow((int)(1280 * main_scale), (int)(800 * main_scale), "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow((int)(1280 * main_scale), (int)(800 * main_scale), "Magic Eye", nullptr, nullptr);
     if (window == nullptr)
         return 1;
     glfwMakeContextCurrent(window);
@@ -119,9 +129,17 @@ int main(int, char**)
     //IM_ASSERT(font != nullptr);
 
     // Our state
-    bool show_demo_window = true;
+    bool show_demo_window = false;
     bool show_another_window = false;
-    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+    bool show_default_window = false;
+    bool show_stl_openfile = false;
+    bool show_texture_openfile = false;
+    ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.60f, 1.00f);
+
+    openfile stl_openfile_dialog("open STL/OBJ file", "stl", { ".stl", ".obj" });
+    openfile texture_openfile_dialog("open Texture file", "texture", { ".png", ".jpg" });
+    std::string selectedstl;
+    std::string selectedtexture;
 
     // Main loop
 #ifdef __EMSCRIPTEN__
@@ -150,32 +168,83 @@ int main(int, char**)
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 650, main_viewport->WorkPos.y + 20), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(550, 680), ImGuiCond_FirstUseEver);
+
+        ImGui::Begin("Magic Eye");
+
+        if (ImGui::BeginMainMenuBar()) {
+            if (ImGui::BeginMenu("Stl")) {
+                if (ImGui::MenuItem("Open", "", false, true)) {
+                    show_stl_openfile = true;
+                }
+                if (ImGui::BeginMenu("Open Recent")) {
+                    ImGui::EndMenu();
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Texture")) {
+                if (ImGui::MenuItem("Open", "", false, true)) {
+                    show_texture_openfile = true;
+                }
+                if (ImGui::BeginMenu("Open Recent")) {
+                    ImGui::EndMenu();
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Edit")) {
+                if (ImGui::MenuItem("Undo", "Ctrl+Z")) {}
+                if (ImGui::MenuItem("Redo", "Ctrl+Y", false, false)) {} // Disabled item
+                ImGui::Separator();
+                if (ImGui::MenuItem("Cut", "Ctrl+X")) {}
+                if (ImGui::MenuItem("Copy", "Ctrl+C")) {}
+                if (ImGui::MenuItem("Paste", "Ctrl+V")) {}
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+        ImGui::Text("%s", "Selected STL/OBJ:");
+        if (!selectedstl.empty()) {
+            ImGui::SameLine();
+            ImGui::Text("%s", selectedstl.c_str());
+        }
+
+        ImGui::Text("%s", "Selected Texture:");
+        if (!selectedtexture.empty()) {
+            ImGui::SameLine();
+            ImGui::Text("%s", selectedtexture.c_str());
+        }
+
+        ImGui::End();
+
+        if (show_stl_openfile) {
+            const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
+            ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 50, main_viewport->WorkPos.y + 20), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(550, 680), ImGuiCond_FirstUseEver);
+
+            ImGui::SetNextWindowFocus();
+            auto result = stl_openfile_dialog.show(show_stl_openfile);
+            if (result == openfile::FileSelected) {
+                selectedstl = stl_openfile_dialog.selecteditem.string();
+            }
+        }
+        if (show_texture_openfile) {
+            const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
+            ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 50, main_viewport->WorkPos.y + 20), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(550, 680), ImGuiCond_FirstUseEver);
+
+            ImGui::SetNextWindowFocus();
+            auto result = texture_openfile_dialog.show(show_texture_openfile);
+            if (result == openfile::FileSelected) {
+                selectedtexture = texture_openfile_dialog.selecteditem.string();
+            }
+        }
+
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
         if (show_demo_window)
             ImGui::ShowDemoWindow(&show_demo_window);
 
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
-        {
-            static float f = 0.0f;
-            static int counter = 0;
-
-            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-
-            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-            ImGui::Checkbox("Another Window", &show_another_window);
-
-            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
-            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
-            ImGui::SameLine();
-            ImGui::Text("counter = %d", counter);
-
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            ImGui::End();
-        }
 
         // 3. Show another simple window.
         if (show_another_window)

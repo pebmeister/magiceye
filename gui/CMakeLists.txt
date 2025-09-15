@@ -8,6 +8,8 @@ find_package(OpenGL REQUIRED)
 if (WIN32)
 add_executable(magic_eye_gui WIN32
     main.cpp
+    openfile.cpp
+    openfile.h
     # Any other files you have in the gui directory
 )
 
@@ -15,6 +17,8 @@ else()
 
 add_executable(magic_eye_gui
     main.cpp
+    openfile.cpp
+    openfile.h
     # Any other files you have in the gui directory
 )
 endif()
