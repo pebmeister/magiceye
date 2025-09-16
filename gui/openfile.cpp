@@ -8,30 +8,40 @@
 #include <GLES2/gl2.h>
 #endif
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
-
 #include <iostream>
 
 #include "openfile.h"
 
+/// <summary>
+/// Iterate a directory
+/// </summary>
+/// <param name="path">start path</param>
+/// <param name="files">vector</param>
+/// <param name="directories">vector</param>
+/// <param name="filters">file extension filters</param>
 void openfile::iterateDirectory(const std::string& path, std::vector<std::filesystem::path>& files, std::vector<std::filesystem::path>& directories,std::vector<std::string> filters)
 {
     try {
         files.clear();
         directories.clear();
 
+        // get the absolute path
         std::filesystem::path dirPath(path);
         auto dir = std::filesystem::absolute(dirPath);
 
+        // check for exist
         if (!std::filesystem::exists(dir)) {
-            std::cerr << "Directory does not exist: " << dir << std::endl;
+            std::cerr << "OpenFile::iterateDirectory Directory does not exist: " << dir << std::endl;
             return;
         }
 
+        // make sure its a directory
         if (!std::filesystem::is_directory(dir)) {
-            std::cerr << "Path is not a directory: " << dir << std::endl;
+            std::cerr << "OpenFile::iterateDirectory Path is not a directory: " << dir << std::endl;
             return;
         }
 
+        // iterate
         for (const auto& entry : std::filesystem::directory_iterator(dir)) {
             auto fullpath = std::filesystem::absolute(entry);
             if (entry.is_regular_file()) {
@@ -54,53 +64,38 @@ void openfile::iterateDirectory(const std::string& path, std::vector<std::filesy
         }
     }
     catch (const std::filesystem::filesystem_error& e) {
-        std::cerr << "Filesystem error in " << path << ": " << e.what() << std::endl;
+        std::cerr << "OpenFile::iterateDirectory Filesystem error in " << path << ": " << e.what() << std::endl;
     }
 }
 
+/// <summary>
+/// constructor for the clss
+/// </summary>
+/// <param name="title">title of window</param>
+/// <param name="startdir">start directory</param>
+/// <param name="filefilters">file filters</param>
 openfile::openfile(std::string title, std::string startdir, std::vector<std::string> filefilters = {}) : title(title), filefilters(filefilters)
 {
     auto dir = std::filesystem::path(startdir);
     currentdir = std::filesystem::absolute(dir);
 }
+ 
 
 openfile::Result openfile::show(bool& show)
 {
     Result result = Closed;
 
     if (ImGui::Begin(title.c_str(), &show)) {
+        auto avail = ImGui::GetContentRegionAvail();
         result = None;
         
         if (openfile_items.size() == 0) {
-            selecteditem = std::filesystem::path("");
-            iterateDirectory(currentdir.string(), files, directories, filefilters);
-
-            item_selected_idx = 0;
-            item_highlighted_idx = 0;
-
-            openfile_items.push_back("..");
-            for (auto& dir : directories)
-                openfile_items.push_back(dir.filename().string());
-            for (auto& file : files)
-                openfile_items.push_back(file.filename().string());
+            BuildOpenFiles();
         }
 
-        std::filesystem::path curpath = currentdir;
-        std::string buttonname;
+        auto dirs = BuildDirs();
 
-        std::vector<std::pair<std::string, std::filesystem::path>> dirs;
-        do {
-
-            auto curname = std::filesystem::absolute(curpath).filename();
-            buttonname = curname.string();
-            if (buttonname.empty())
-                continue;
-
-            dirs.push_back({ buttonname, std::filesystem::absolute(curpath) });
-            curpath = std::filesystem::absolute(curpath.parent_path());
-
-        } while (!buttonname.empty());
-
+        // build the directory buttons
         for (auto& dir : dirs | std::views::reverse) {
             if (ImGui::Button(dir.first.c_str()))  {
                 currentdir = dir.second;
@@ -108,10 +103,13 @@ openfile::Result openfile::show(bool& show)
             }
             ImGui::SameLine();
         }
+
         ImGui::Spacing();
+        // full path of the current directory
         ImGui::Text("%s", currentdir.string().c_str());
        
-        if (ImGui::BeginListBox(" ")) {
+        // Create the listbox
+        if (ImGui::BeginListBox(" ", ImVec2{ -25 , -75})) {
             for (auto i = 0; i < openfile_items.size(); i++) {
                 auto item = openfile_items[i].c_str();
                 const bool is_selected = (item_selected_idx == i);
@@ -121,25 +119,11 @@ openfile::Result openfile::show(bool& show)
                         ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
 
                     item_selected_idx = i;
-
                     if (item_selected_idx > 0 && item_selected_idx  <= files.size()) {
                         selecteditem = files[item_selected_idx -1];
                     }
                     if (doubleclick) {
-                        // the userer selected an item. // for now just exit but what we really beed to do is navigate if its a directory
-                        if (item_selected_idx == 0) {
-                            currentdir = std::filesystem::absolute(currentdir.parent_path());
-                            openfile_items.clear();
-                        }
-                        else if (item_selected_idx <= files.size()) {
-                            result = FileSelected;
-                            show = false;
-                        }
-                        else {
-                            auto dirindex = item_selected_idx - files.size() - 1;
-                            currentdir = std::filesystem::absolute(directories[dirindex]);
-                            openfile_items.clear();
-                        }
+                        HandleOpen(result, show);
                     }
                 }
                 // Highlight hovered item (optional)
@@ -153,35 +137,18 @@ openfile::Result openfile::show(bool& show)
             }
         }
         ImGui::EndListBox();
-        ImGui::SameLine();
-        ImGui::BeginGroup();
-
-        if (ImGui::Button("Open")) {
-            // the userer selected an item. // for now just exit but what we really beed to do is navigate if its a directory
-            if (item_selected_idx == 0) {
-                currentdir = std::filesystem::absolute(currentdir.parent_path());
-                openfile_items.clear();
-            }
-            else if (item_selected_idx <= files.size()) {
-                result = FileSelected;
-                show = false;
-            }
-            else {
-                auto dirindex = item_selected_idx - files.size() -1;
-                currentdir = std::filesystem::absolute(directories[dirindex]);
-                openfile_items.clear();
-            }
-        }
-        if (ImGui::Button("Cancel")) {
-            show = false;
-        }
-        ImGui::EndGroup();
-         
         ImGui::Separator();
+
+        ImGui::SetNextItemWidth(avail.x - 175);
         if (item_selected_idx > 0 && item_selected_idx <= files.size()) {
-            ImGui::Spacing();
-            ImGui::Text("File: %s", selecteditem.filename().string().c_str());
+            ImGui::LabelText("", "File: %s", (selecteditem.filename().string()).c_str());
         }
+        else {
+            ImGui::LabelText("", "File:");
+        }
+
+        ImGui::SameLine(); if (ImGui::Button("Open"))   { HandleOpen(result, show); }
+        ImGui::SameLine(); if (ImGui::Button("Cancel")) { show = false; }
     }
 
     ImGui::End();

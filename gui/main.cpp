@@ -215,7 +215,6 @@ int main(int, char**)
             ImGui::SameLine();
             ImGui::Text("%s", selectedtexture.c_str());
         }
-
         ImGui::End();
 
         if (show_stl_openfile) {
