@@ -19,8 +19,11 @@
 #include <GLES2/gl2.h>
 #endif
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
-
 #include <filesystem>
+
+#include <thread>
+#include <atomic>
+#include <future>
 
 // [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
 // To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
@@ -41,6 +44,10 @@ int my_width, my_height;
 
 bool render_image = false;
 GLuint my_texture = 0;
+
+std::future<bool> render_future;
+std::atomic<bool> is_rendering{ false };
+std::string rendered_image_path;
 
 namespace fs = std::filesystem;
 
@@ -311,27 +318,59 @@ int main(int, char**)
         auto paramsdiabled = stereogram_options->stlpath.empty() || stereogram_options->texpath.empty();
         ImGui::BeginDisabled(paramsdiabled);
 
-        if (ImGui::Button("Render")) {
-
+        if (ImGui::Button("Render") && !is_rendering) {
+            is_rendering = true;
             render_image = false;
-            StereogramGenerator st(stereogram_options);
-            auto error = st.create();
 
-            if (!error) {
-                auto name = stereogram_options->outprefix + "_sirds.png";
-                bool ret = LoadTextureFromFile(name.c_str(), &my_texture, &my_width, &my_height);
-                render_image = true;
+            // Launch the rendering in a separate thread
+            render_future = std::async(std::launch::async, [&]()
+                {
+                    StereogramGenerator st(stereogram_options);
+                    auto error = st.create();
+
+                    if (!error) {
+                        rendered_image_path = stereogram_options->outprefix + "_sirds.png";
+                        return true;
+                    }
+                    return false;
+                });
+        }
+
+        // Check if rendering is complete (call this in your update loop)
+        if (is_rendering) {
+            // Check if the future is ready (non-blocking)
+            if (render_future.valid() &&
+                render_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+
+                bool success = render_future.get();
+                if (success) {
+                    // Load the texture on the main thread
+                    bool ret = LoadTextureFromFile(
+                        rendered_image_path.c_str(),
+                        &my_texture,
+                        &my_width,
+                        &my_height
+                    );
+                    if (ret) {
+                        render_image = true;
+                    }
+                }
+                is_rendering = false;
+            }
+            else {
+                // Show a loading indicator
+                ImGui::Text("Rendering...");
             }
         }
 
+        // Display the image when ready
         if (render_image) {
             if (ImGui::Begin(stereogram_options->stlpath.c_str(), &render_image)) {
-
-                // In your ImGui rendering code
                 ImGui::Image((void*)(intptr_t)my_texture, ImVec2(my_width, my_height));
             }
             ImGui::End();
         }
+        
         ImGui::EndDisabled();
 
         ImGui::End();
