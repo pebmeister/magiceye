@@ -10,6 +10,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include <locale>
 #include <stdio.h>
 #define GL_SILENCE_DEPRECATION
 #if defined(IMGUI_IMPL_OPENGL_ES2)
@@ -38,6 +39,49 @@
 namespace fs = std::filesystem;
 
 
+
+static std::string ToNarrow(const wchar_t s, char dfault = '?',
+    const std::locale& loc = std::locale())
+{
+    std::ostringstream stm;
+
+    stm << std::use_facet< std::ctype<wchar_t> >(loc).narrow(s, dfault);
+    return stm.str();
+}
+
+// Helper function to resolve paths with ".." components
+fs::path resolve_path(const fs::path& input_path)
+{
+    try {
+        // First, convert to absolute path
+        fs::path absolute_path = fs::absolute(input_path);
+
+        // Then, canonicalize it (which resolves symlinks and normalizes path)
+        // Note: canonical requires the path to exist
+        if (fs::exists(absolute_path)) {
+            return fs::canonical(absolute_path);
+        }
+
+        // If the path doesn't exist, we need to manually resolve ".." components
+        fs::path resolved_path;
+        for (const auto& part : absolute_path) {
+            if (part == "..") {
+                if (!resolved_path.empty() && resolved_path != resolved_path.root_path()) {
+                    resolved_path = resolved_path.parent_path();
+                }
+            }
+            else if (part != "." && !part.empty()) {
+                resolved_path /= part;
+            }
+        }
+
+        return resolved_path;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error resolving path: " << e.what() << std::endl;
+        return input_path;
+    }
+}
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -128,6 +172,7 @@ int main(int, char**)
     //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf");
     //IM_ASSERT(font != nullptr);
 
+
     // Our state
     bool show_demo_window = false;
     bool show_another_window = false;
@@ -136,8 +181,12 @@ int main(int, char**)
     bool show_texture_openfile = false;
     ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.60f, 1.00f);
 
-    openfile stl_openfile_dialog("open STL/OBJ file", "stl", { ".stl", ".obj" });
-    openfile texture_openfile_dialog("open Texture file", "texture", { ".png", ".jpg" });
+    std::string sep = ToNarrow(std::filesystem::path::preferred_separator);
+    auto root = ".." + sep + ".." + sep;
+    auto stlpath = resolve_path(std::filesystem::absolute(root + "stl"));
+    auto texturepath = resolve_path(std::filesystem::absolute(root + "texture"));
+    openfile stl_openfile_dialog("open STL/OBJ file", stlpath.string(), {".stl", ".obj"});
+    openfile texture_openfile_dialog("open Texture file", texturepath.string(), { ".png", ".jpg" });
     std::string selectedstl;
     std::string selectedtexture;
 
