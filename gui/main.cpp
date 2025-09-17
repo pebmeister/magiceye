@@ -359,7 +359,7 @@ int main(int, char**)
             }
             else {
                 // Show a loading indicator
-                ImGui::Text("Rendering...");
+                ImGui::SameLine(); ImGui::ProgressBar(-1.0f * ImGui::GetTime());
             }
         }
 
