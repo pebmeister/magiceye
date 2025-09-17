@@ -1,3 +1,5 @@
+// written by Paul Baxter
+
 // Dear ImGui: standalone example application for GLFW + OpenGL 3, using programmable pipeline
 // (GLFW is a cross-platform general purpose library for handling windows, inputs, OpenGL/Vulkan/Metal graphics context creation, etc.)
 
@@ -20,7 +22,6 @@
 
 #include <filesystem>
 
-
 // [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
 // To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
 // Your own project should not be affected, as you are likely to link with a newer binary of GLFW that is adequate for your version of Visual Studio.
@@ -35,10 +36,13 @@
 
 #include "Options.h"
 #include "openfile.h"
+#include "StereogramGenerator.h"
+int my_width, my_height;
+
+bool render_image = false;
+GLuint my_texture = 0;
 
 namespace fs = std::filesystem;
-
-
 
 static std::string ToNarrow(const wchar_t s, char dfault = '?',
     const std::locale& loc = std::locale())
@@ -50,7 +54,7 @@ static std::string ToNarrow(const wchar_t s, char dfault = '?',
 }
 
 // Helper function to resolve paths with ".." components
-fs::path resolve_path(const fs::path& input_path)
+static fs::path resolve_path(const fs::path& input_path)
 {
     try {
         // First, convert to absolute path
@@ -88,6 +92,37 @@ static void glfw_error_callback(int error, const char* description)
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
 
+
+// Helper function to load an image into an OpenGL texture
+bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height)
+{
+    // Load image data
+    int image_width = 0;
+    int image_height = 0;
+    unsigned char* image_data = stbi_load(filename, &image_width, &image_height, NULL, 4);
+    if (image_data == NULL)
+        return false;
+
+    // Create OpenGL texture
+    glGenTextures(1, out_texture);
+    glBindTexture(GL_TEXTURE_2D, *out_texture);
+
+    // Setup filtering parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // Upload pixels to GPU
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
+    stbi_image_free(image_data);
+
+    *out_width = image_width;
+    *out_height = image_height;
+
+    return true;
+}
+
+// In your initialization code
+
 // Main code
 int main(int, char**)
 {
@@ -120,8 +155,8 @@ int main(int, char**)
     const char* glsl_version = "#version 130";
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-    //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
-    //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
+    // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
 #endif
     
     // Create window with graphics context
@@ -141,7 +176,8 @@ int main(int, char**)
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
-    //ImGui::StyleColorsLight();
+    // ImGui::StyleColorsLight();
+    // ImGui::StyleColorsClassic();
 
     // Setup scaling
     ImGuiStyle& style = ImGui::GetStyle();
@@ -174,12 +210,9 @@ int main(int, char**)
 
 
     // Our state
-    bool show_demo_window = false;
-    bool show_another_window = false;
-    bool show_default_window = false;
     bool show_stl_openfile = false;
     bool show_texture_openfile = false;
-    ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.60f, 1.00f);
+    ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.80f, 1.00f);
 
     std::string sep = ToNarrow(std::filesystem::path::preferred_separator);
     auto root = ".." + sep + ".." + sep;
@@ -187,8 +220,9 @@ int main(int, char**)
     auto texturepath = resolve_path(std::filesystem::absolute(root + "texture"));
     openfile stl_openfile_dialog("open STL/OBJ file", stlpath.string(), {".stl", ".obj"});
     openfile texture_openfile_dialog("open Texture file", texturepath.string(), { ".png", ".jpg" });
-    std::string selectedstl;
-    std::string selectedtexture;
+
+    auto image_rendured = false;
+    auto stereogram_options = std::make_shared<Options>();
 
     // Main loop
 #ifdef __EMSCRIPTEN__
@@ -218,52 +252,88 @@ int main(int, char**)
         ImGui::NewFrame();
 
         const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 650, main_viewport->WorkPos.y + 20), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(550, 680), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 50, main_viewport->WorkPos.y + 50), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(1000, 600), ImGuiCond_FirstUseEver);
 
         ImGui::Begin("Magic Eye");
-
-        if (ImGui::BeginMainMenuBar()) {
-            if (ImGui::BeginMenu("Stl")) {
-                if (ImGui::MenuItem("Open", "", false, true)) {
-                    show_stl_openfile = true;
-                }
-                if (ImGui::BeginMenu("Open Recent")) {
+        
+        auto use_menubar = false;
+        if (use_menubar) {
+            if (ImGui::BeginMainMenuBar()) {
+                if (ImGui::BeginMenu("Stl")) {
+                    if (ImGui::MenuItem("Open", "", false, true)) {
+                        show_stl_openfile = true;
+                    }
+                    if (ImGui::BeginMenu("Open Recent")) {
+                        ImGui::EndMenu();
+                    }
                     ImGui::EndMenu();
                 }
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("Texture")) {
-                if (ImGui::MenuItem("Open", "", false, true)) {
-                    show_texture_openfile = true;
-                }
-                if (ImGui::BeginMenu("Open Recent")) {
+                if (ImGui::BeginMenu("Texture")) {
+                    if (ImGui::MenuItem("Open", "", false, true)) {
+                        show_texture_openfile = true;
+                    }
+                    if (ImGui::BeginMenu("Open Recent")) {
+                        ImGui::EndMenu();
+                    }
                     ImGui::EndMenu();
                 }
-                ImGui::EndMenu();
+                if (ImGui::BeginMenu("Edit")) {
+                    if (ImGui::MenuItem("Undo", "Ctrl+Z")) {}
+                    if (ImGui::MenuItem("Redo", "Ctrl+Y", false, false)) {} // Disabled item
+                    ImGui::Separator();
+                    if (ImGui::MenuItem("Cut", "Ctrl+X")) {}
+                    if (ImGui::MenuItem("Copy", "Ctrl+C")) {}
+                    if (ImGui::MenuItem("Paste", "Ctrl+V")) {}
+                    ImGui::EndMenu();
+                }
+                ImGui::EndMainMenuBar();
             }
-            if (ImGui::BeginMenu("Edit")) {
-                if (ImGui::MenuItem("Undo", "Ctrl+Z")) {}
-                if (ImGui::MenuItem("Redo", "Ctrl+Y", false, false)) {} // Disabled item
-                ImGui::Separator();
-                if (ImGui::MenuItem("Cut", "Ctrl+X")) {}
-                if (ImGui::MenuItem("Copy", "Ctrl+C")) {}
-                if (ImGui::MenuItem("Paste", "Ctrl+V")) {}
-                ImGui::EndMenu();
-            }
-            ImGui::EndMainMenuBar();
         }
-        ImGui::Text("%s", "Selected STL/OBJ:");
-        if (!selectedstl.empty()) {
-            ImGui::SameLine();
-            ImGui::Text("%s", selectedstl.c_str());
+        if (ImGui::Button("Select STL/OBJ")) {
+            show_stl_openfile = true;
+        }
+        ImGui::SameLine();
+        auto stldisabled = stereogram_options->stlpath.empty();
+        ImGui::BeginDisabled(stldisabled);
+        ImGui::LabelText("", "%s", stereogram_options->stlpath.c_str());
+        ImGui::EndDisabled();
+
+        if (ImGui::Button("Select TEXTURE")) {
+            show_texture_openfile = true;
+        }
+        ImGui::SameLine();
+        auto texturedisabled = stereogram_options->stlpath.empty();
+        ImGui::BeginDisabled(texturedisabled);
+        ImGui::LabelText("", "%s", stereogram_options->texpath.c_str());
+        ImGui::EndDisabled();
+
+        auto paramsdiabled = stereogram_options->stlpath.empty() || stereogram_options->texpath.empty();
+        ImGui::BeginDisabled(paramsdiabled);
+
+        if (ImGui::Button("Render")) {
+
+            render_image = false;
+            StereogramGenerator st(stereogram_options);
+            auto error = st.create();
+
+            if (!error) {
+                auto name = stereogram_options->outprefix + "_sirds.png";
+                bool ret = LoadTextureFromFile(name.c_str(), &my_texture, &my_width, &my_height);
+                render_image = true;
+            }
         }
 
-        ImGui::Text("%s", "Selected Texture:");
-        if (!selectedtexture.empty()) {
-            ImGui::SameLine();
-            ImGui::Text("%s", selectedtexture.c_str());
+        if (render_image) {
+            if (ImGui::Begin(stereogram_options->stlpath.c_str(), &render_image)) {
+
+                // In your ImGui rendering code
+                ImGui::Image((void*)(intptr_t)my_texture, ImVec2(my_width, my_height));
+            }
+            ImGui::End();
         }
+        ImGui::EndDisabled();
+
         ImGui::End();
 
         if (show_stl_openfile) {
@@ -274,7 +344,7 @@ int main(int, char**)
             ImGui::SetNextWindowFocus();
             auto result = stl_openfile_dialog.show(show_stl_openfile);
             if (result == openfile::FileSelected) {
-                selectedstl = stl_openfile_dialog.selecteditem.string();
+                stereogram_options->stlpath = stl_openfile_dialog.selecteditem.string();
             }
         }
         if (show_texture_openfile) {
@@ -285,23 +355,8 @@ int main(int, char**)
             ImGui::SetNextWindowFocus();
             auto result = texture_openfile_dialog.show(show_texture_openfile);
             if (result == openfile::FileSelected) {
-                selectedtexture = texture_openfile_dialog.selecteditem.string();
+                stereogram_options->texpath = texture_openfile_dialog.selecteditem.string();
             }
-        }
-
-        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        if (show_demo_window)
-            ImGui::ShowDemoWindow(&show_demo_window);
-
-
-        // 3. Show another simple window.
-        if (show_another_window)
-        {
-            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-            ImGui::Text("Hello from another window!");
-            if (ImGui::Button("Close Me"))
-                show_another_window = false;
-            ImGui::End();
         }
 
         // Rendering

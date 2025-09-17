@@ -1,3 +1,5 @@
+// written by Paul Baxter
+
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
@@ -17,8 +19,8 @@
 /// Iterate a directory
 /// </summary>
 /// <param name="path">start path</param>
-/// <param name="files">vector</param>
-/// <param name="directories">vector</param>
+/// <param name="files">vector of file paths</param>
+/// <param name="directories">vector of directory paths</param>
 /// <param name="filters">file extension filters</param>
 void openfile::iterateDirectory(const std::string& path, std::vector<std::filesystem::path>& files, std::vector<std::filesystem::path>& directories,std::vector<std::string> filters)
 {
@@ -144,7 +146,7 @@ openfile::Result openfile::show(bool& show)
         ImGui::SameLine();
         bool disablefoward = backHistory.size() == 0;
         ImGui::BeginDisabled(disablefoward);
-        if (ImGui::Button("Foward")) {
+        if (ImGui::Button("Forward")) {
             directoryHistory.push(currentdir);
             currentdir = backHistory.top();
             backHistory.pop();
@@ -189,13 +191,12 @@ openfile::Result openfile::show(bool& show)
        
         ImVec4 background_color = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
         float luminance = 0.2126f * background_color.x + 0.7152f * background_color.y + 0.0722f * background_color.z;
+        // Detect if we're using a dark theme
         bool is_dark_theme = luminance < 0.5f;
-
 
         // Create the listbox
         if (ImGui::BeginListBox(" ", ImVec2{ -25 , -50 })) {
 
-            // Detect if we're using a dark theme
             for (auto i = 0; i < openfile_items.size(); i++) {
                 auto item = openfile_items[i].c_str();
                 const bool is_selected = (item_selected_idx == i);
@@ -231,8 +232,6 @@ openfile::Result openfile::show(bool& show)
                 if (i < directories.size()) {
                     ImGui::PopStyleColor();
                 }
-                // Pop the color style
-
 
                 // Highlight hovered item (optional)
                 if (item_highlight && ImGui::IsItemHovered())
@@ -245,7 +244,6 @@ openfile::Result openfile::show(bool& show)
             }
         }
         ImGui::EndListBox();
-        
         ImGui::Separator();
 
         std::string file;
