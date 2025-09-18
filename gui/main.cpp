@@ -37,6 +37,7 @@
 #include "../libs/emscripten/emscripten_mainloop_stub.h"
 #endif
 
+#include "customwidgets.h"
 #include "Options.h"
 #include "openfile.h"
 #include "StereogramGenerator.h"
@@ -128,7 +129,6 @@ bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_wid
     return true;
 }
 
-// In your initialization code
 
 // Main code
 int main(int, char**)
@@ -297,6 +297,8 @@ int main(int, char**)
                 ImGui::EndMainMenuBar();
             }
         }
+
+        // STL/OBJ
         if (ImGui::Button("Select STL/OBJ")) {
             show_stl_openfile = true;
         }
@@ -306,6 +308,7 @@ int main(int, char**)
         ImGui::LabelText("", "%s", stereogram_options->stlpath.c_str());
         ImGui::EndDisabled();
 
+        // TEXTURE
         if (ImGui::Button("Select TEXTURE")) {
             show_texture_openfile = true;
         }
@@ -315,9 +318,13 @@ int main(int, char**)
         ImGui::LabelText("", "%s", stereogram_options->texpath.c_str());
         ImGui::EndDisabled();
 
+        ImGui::ShowDemoWindow();
+
         auto paramsdiabled = stereogram_options->stlpath.empty() || stereogram_options->texpath.empty();
         ImGui::BeginDisabled(paramsdiabled);
 
+
+        // Render
         if (ImGui::Button("Render") && !is_rendering) {
             is_rendering = true;
             render_image = false;
@@ -359,7 +366,10 @@ int main(int, char**)
             }
             else {
                 // Show a loading indicator
-                ImGui::SameLine(); ImGui::ProgressBar(-1.0f * ImGui::GetTime());
+
+                ImGui::SameLine(); LoadingSpinner("##spinner", 15.0f, 4);
+
+                // ImGui::SameLine(); ImGui::ProgressBar(-1.0f * ImGui::GetTime());
             }
         }
 
@@ -369,9 +379,12 @@ int main(int, char**)
                 ImGui::Image((void*)(intptr_t)my_texture, ImVec2(my_width, my_height));
             }
             ImGui::End();
-        }
-        
+        }        
+       
         ImGui::EndDisabled();
+        static float vec4f[4] = { 0.10f, 0.20f, 0.30f, 0.44f };
+        ImGui::SetNextItemWidth(400);
+        ImGui::SliderFloat3("slider", vec4f, 0.0f, 1.0f);
 
         ImGui::End();
 

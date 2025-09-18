@@ -10,6 +10,8 @@ add_executable(magic_eye_gui WIN32
     main.cpp
     openfile.cpp
     openfile.h
+    customwidgets.cpp
+    customwidgets.h
     # Any other files you have in the gui directory
 )
 
@@ -19,6 +21,8 @@ add_executable(magic_eye_gui
     main.cpp
     openfile.cpp
     openfile.h
+    customwidgets.cpp
+    customwidgets.h
     # Any other files you have in the gui directory
 )
 endif()
