@@ -195,7 +195,7 @@ openfile::Result openfile::show(bool& show)
         bool is_dark_theme = luminance < 0.5f;
 
         // Create the listbox
-        if (ImGui::BeginListBox(" ", ImVec2{ -25 , -50 })) {
+        if (ImGui::BeginListBox("##listbox", ImVec2{ -25 , -50 })) {
 
             for (auto i = 0; i < openfile_items.size(); i++) {
                 auto item = openfile_items[i].c_str();
@@ -251,7 +251,7 @@ openfile::Result openfile::show(bool& show)
             file = (selecteditem.filename().string());
         }
         ImGui::SetNextItemWidth(avail.x - 175);
-        ImGui::LabelText("", "File: %s", file.c_str());
+        ImGui::LabelText("##File", "File: %s", file.c_str());
         ImGui::SameLine(); if (ImGui::Button("Open"))   {  HandleOpen(result, show); }
         ImGui::SameLine(); if (ImGui::Button("Cancel")) { show = false; }
     }

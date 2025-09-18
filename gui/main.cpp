@@ -102,7 +102,7 @@ static void glfw_error_callback(int error, const char* description)
 
 
 // Helper function to load an image into an OpenGL texture
-bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height)
+static bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height)
 {
     // Load image data
     int image_width = 0;
@@ -117,7 +117,6 @@ bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_wid
 
     // Setup filtering parameters
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     // Upload pixels to GPU
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
@@ -299,11 +298,14 @@ int main(int, char**)
         }
 
         // STL/OBJ
+        ImGui::BeginDisabled(is_rendering);
+
         if (ImGui::Button("Select STL/OBJ")) {
             show_stl_openfile = true;
         }
         ImGui::SameLine();
         auto stldisabled = stereogram_options->stlpath.empty();
+        
         ImGui::BeginDisabled(stldisabled);
         ImGui::LabelText("", "%s", stereogram_options->stlpath.c_str());
         ImGui::EndDisabled();
@@ -318,30 +320,8 @@ int main(int, char**)
         ImGui::LabelText("", "%s", stereogram_options->texpath.c_str());
         ImGui::EndDisabled();
 
-        ImGui::ShowDemoWindow();
-
-        auto paramsdiabled = stereogram_options->stlpath.empty() || stereogram_options->texpath.empty();
+        auto paramsdiabled = stereogram_options->stlpath.empty() || stereogram_options->texpath.empty() || is_rendering;
         ImGui::BeginDisabled(paramsdiabled);
-
-
-        // Render
-        if (ImGui::Button("Render") && !is_rendering) {
-            is_rendering = true;
-            render_image = false;
-
-            // Launch the rendering in a separate thread
-            render_future = std::async(std::launch::async, [&]()
-                {
-                    StereogramGenerator st(stereogram_options);
-                    auto error = st.create();
-
-                    if (!error) {
-                        rendered_image_path = stereogram_options->outprefix + "_sirds.png";
-                        return true;
-                    }
-                    return false;
-                });
-        }
 
         // Check if rendering is complete (call this in your update loop)
         if (is_rendering) {
@@ -364,13 +344,6 @@ int main(int, char**)
                 }
                 is_rendering = false;
             }
-            else {
-                // Show a loading indicator
-
-                ImGui::SameLine(); LoadingSpinner("##spinner", 15.0f, 4);
-
-                // ImGui::SameLine(); ImGui::ProgressBar(-1.0f * ImGui::GetTime());
-            }
         }
 
         // Display the image when ready
@@ -380,12 +353,106 @@ int main(int, char**)
             }
             ImGui::End();
         }        
-       
-        ImGui::EndDisabled();
-        static float vec4f[4] = { 0.10f, 0.20f, 0.30f, 0.44f };
-        ImGui::SetNextItemWidth(400);
-        ImGui::SliderFloat3("slider", vec4f, 0.0f, 1.0f);
 
+        ImGui::Separator();
+
+        static int window_size[2] = { stereogram_options->width, stereogram_options->height };
+        ImGui::SetNextItemWidth(264);
+        CustomWidgets::InputInt2("Dimentions", window_size);
+
+        static int eye_sep = stereogram_options->eye_sep;
+        ImGui::SetNextItemWidth(130);
+        CustomWidgets::SliderInt("Eye separation", &eye_sep, 0, 250);
+
+        static bool customcameraposchecked = stereogram_options->custom_lookat_provided;
+        ImGui::BeginDisabled(!customcameraposchecked);
+        static float camera_pos[3] = { stereogram_options->custom_cam_pos[0], stereogram_options->custom_cam_pos[1], stereogram_options->custom_cam_pos[2]};
+        ImGui::SetNextItemWidth(400);
+        CustomWidgets::InputFloat3("Camera pos", camera_pos);
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::Checkbox("Use Custom camera pos", &customcameraposchecked);
+
+
+        static bool customlookatchecked = stereogram_options->custom_lookat_provided;
+        ImGui::BeginDisabled(!customlookatchecked);
+        static float look_pos[3] = { stereogram_options->custom_look_at[0], stereogram_options->custom_look_at[1], stereogram_options->custom_look_at[2] };
+        ImGui::SetNextItemWidth(400);
+        CustomWidgets::InputFloat3("Look at", camera_pos);
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::Checkbox("Use Custom look at", &customlookatchecked);
+
+        static bool customorthscalechecked = stereogram_options->custom_orth_scale_provided;
+        ImGui::BeginDisabled(!customorthscalechecked);
+        static float orthscale = stereogram_options->custom_orth_scale;
+        ImGui::SetNextItemWidth(130);
+        CustomWidgets::InputFloat("ortho scale", &orthscale);
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(261);
+        ImGui::LabelText("","%s","");
+        ImGui::SameLine();
+        ImGui::Checkbox("Use Custom orthogonal scale", &customorthscalechecked);
+
+        static bool uselaplacechecked = stereogram_options->laplace_smoothing;
+        ImGui::BeginDisabled(!uselaplacechecked);
+        static int laplacelayers = stereogram_options->laplace_smooth_layers;
+        ImGui::SetNextItemWidth(130);
+        CustomWidgets::InputInt("Laplace layers", &laplacelayers);
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(261);
+        ImGui::LabelText("", "%s", "");
+        ImGui::SameLine();
+        ImGui::Checkbox("Use Laplace smoothing", &uselaplacechecked);
+
+        static float fieldofview = stereogram_options->fov;
+        ImGui::SetNextItemWidth(130);
+        CustomWidgets::InputFloat("Field of View", &fieldofview);
+
+
+        static float rotation[3] = { stereogram_options->rot_deg[0], stereogram_options->rot_deg[1], stereogram_options->rot_deg[2] };
+        ImGui::SetNextItemWidth(400);
+        CustomWidgets::InputFloat3("Rotation", rotation);
+
+        static float translation[3] = { stereogram_options->trans[0], stereogram_options->trans[1], stereogram_options->trans[2] };
+        ImGui::SetNextItemWidth(400);
+        CustomWidgets::InputFloat3("Translation", rotation);
+
+        static float scale[3] = { stereogram_options->sc[0], stereogram_options->sc[1], stereogram_options->sc[2] };
+        ImGui::SetNextItemWidth(400);
+        CustomWidgets::InputFloat3("Scale", scale);
+
+        static float shear[3] = { stereogram_options->shear[0], stereogram_options->shear[1], stereogram_options->shear[2] };
+        ImGui::SetNextItemWidth(400);
+        CustomWidgets::InputFloat3("Shear", shear);
+
+
+        // Render
+        if (ImGui::Button("Render")) {
+            is_rendering = true;
+            render_image = false;
+
+            // Launch the rendering in a separate thread
+            render_future = std::async(std::launch::async, [&]()
+                {
+                    StereogramGenerator st(stereogram_options);
+                    auto error = st.create();
+
+                    if (!error) {
+                        rendered_image_path = stereogram_options->outprefix + "_sirds.png";
+                        return true;
+                    }
+                    return false;
+                });
+        }
+
+        ImGui::EndDisabled();
+        ImGui::EndDisabled();
+        if (is_rendering) {
+            ImGui::SameLine(); CustomWidgets::LoadingSpinner("##spinner", 12.0f, 4);
+        }
         ImGui::End();
 
         if (show_stl_openfile) {
