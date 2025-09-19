@@ -58,7 +58,8 @@ private:
         }
         else {
             // This is a file
-            selecteditem = files[item_selected_idx - directories.size()];
+            if (files.size() > 0)
+                selecteditem = files[item_selected_idx - directories.size()];
         }
 
         for (auto& dir : directories)
