@@ -129,7 +129,7 @@ bool CustomWidgets::SliderScalarN(const char* label, ImGuiDataType data_type, vo
 
     ImGui::PushMultiItemsWidths(components, ImGui::CalcItemWidth());
 
-    ImGui::LabelText("", label);
+    ImGui::LabelText("", "%s", label);
     ImGui::SameLine();
     
     auto type_size = ImGui::DataTypeGetInfo(data_type);
@@ -161,7 +161,7 @@ bool CustomWidgets::InputScalarN(const char* label, ImGuiDataType data_type, voi
 
     ImGui::PushMultiItemsWidths(components, ImGui::CalcItemWidth());
 
-    ImGui::LabelText("", label);
+    ImGui::LabelText("", "%s", label);
     ImGui::SameLine();
 
     auto type_size = ImGui::DataTypeGetInfo(data_type);
