@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-
+#include <numbers>
 #include "Options.h"
 
 class Camera {
@@ -34,7 +34,7 @@ public:
         if (zcam <= tolerance) return false;
 
         if (perspective) {
-            float fov_rad = fov_deg * (3.14159265358979323846f / 180.0f);
+            float fov_rad = fov_deg * (std::numbers::pi / 180.0f);
             float scale = std::tan(fov_rad * 0.5f);
             ndc_x = (p_cam.x / (zcam * scale)) / aspect;
             ndc_y = (p_cam.y / (zcam * scale));
