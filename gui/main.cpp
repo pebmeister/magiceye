@@ -55,11 +55,13 @@
 int my_width, my_height;
 
 bool render_image = false;
-GLuint my_texture = 0;
+GLuint my_sirds_texture = 0;
+GLuint my_depth_texture = 0;
 
 std::future<bool> render_future;
 std::atomic<bool> is_rendering{ false };
 std::string rendered_image_path;
+std::string rendered_depth_path;
 
 namespace fs = std::filesystem;
 
@@ -231,7 +233,7 @@ int main(int, char**)
 
     std::string sep = ToNarrow(std::filesystem::path::preferred_separator);
     std::string root;
-
+    
     // Find the Documents folder on various platforms
 #ifdef _WIN32
 #pragma comment(lib, "shell32.lib")
@@ -260,7 +262,7 @@ int main(int, char**)
 
     auto image_rendured = false;
     auto stereogram_options = std::make_shared<Options>();
-
+    
     // Main loop
 #ifdef __EMSCRIPTEN__
     // For an Emscripten build we are disabling file-system access, so let's not attempt to do a fopen() of the imgui.ini file.
@@ -331,11 +333,18 @@ int main(int, char**)
                     // Load the texture on the main thread
                     bool ret = LoadTextureFromFile(
                         rendered_image_path.c_str(),
-                        &my_texture,
+                        &my_sirds_texture,
                         &my_width,
                         &my_height
                     );
                     if (ret) {
+                        bool ret2 = LoadTextureFromFile(
+                            rendered_depth_path.c_str(),
+                            &my_depth_texture,
+                            &my_width,
+                            &my_height
+                        );
+
                         render_image = true;
                     }
                 }
@@ -345,11 +354,20 @@ int main(int, char**)
 
         // Display the image when ready
         if (render_image) {
-            if (ImGui::Begin(stereogram_options->stlpath.c_str(), &render_image)) {
-                ImGui::Image((void*)(intptr_t)my_texture, ImVec2(my_width, my_height));
+            std::filesystem::path depth(stereogram_options->outprefix + "_depth.png");
+            auto path = std::filesystem::absolute(depth);
+            if (ImGui::Begin(path.string().c_str(), &render_image)) {
+                ImGui::Image((void*)(intptr_t)my_depth_texture, ImVec2(my_width, my_height));
             }
             ImGui::End();
-        }        
+
+            std::filesystem::path sird(stereogram_options->outprefix + "_sirds.png");
+            path = std::filesystem::absolute(sird);
+            if (ImGui::Begin(path.string().c_str(), &render_image)) {
+                ImGui::Image((void*)(intptr_t)my_sirds_texture, ImVec2(my_width, my_height));
+            }
+            ImGui::End();
+        }
 
         ImGui::Separator();
 
@@ -592,6 +610,10 @@ int main(int, char**)
             is_rendering = true;
             render_image = false;
 
+            auto path = std::filesystem::path(stereogram_options->stlpath);
+            auto outp = std::filesystem::absolute(path.replace_extension(""));
+
+            stereogram_options->outprefix =  outp.string();
             // Launch the rendering in a separate thread
             render_future = std::async(std::launch::async, [&]()
                 {
@@ -600,6 +622,7 @@ int main(int, char**)
 
                     if (!error) {
                         rendered_image_path = stereogram_options->outprefix + "_sirds.png";
+                        rendered_depth_path = stereogram_options->outprefix + "_depth.png";
                         return true;
                     }
                     return false;
