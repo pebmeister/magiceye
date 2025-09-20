@@ -25,6 +25,17 @@
 #include <atomic>
 #include <future>
 
+#ifdef __linux__
+#include <unistd.h>
+#include <sys/types.h>
+#include <pwd.h>
+#endif
+
+#ifdef _WIN32
+#include <windows.h>
+#include <iostream>
+#include <shlobj.h>
+#endif
 // [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
 // To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
 // Your own project should not be affected, as you are likely to link with a newer binary of GLFW that is adequate for your version of Visual Studio.
@@ -100,7 +111,6 @@ static void glfw_error_callback(int error, const char* description)
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
 
-
 // Helper function to load an image into an OpenGL texture
 static bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height)
 {
@@ -127,7 +137,6 @@ static bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* 
 
     return true;
 }
-
 
 // Main code
 int main(int, char**)
@@ -221,7 +230,29 @@ int main(int, char**)
     ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.80f, 1.00f);
 
     std::string sep = ToNarrow(std::filesystem::path::preferred_separator);
-    auto root = ".." + sep + ".." + sep;
+    std::string root;
+
+    // Find the Documents folder on various platforms
+#ifdef _WIN32
+#pragma comment(lib, "shell32.lib")
+    {
+        CHAR my_documents[MAX_PATH];
+        HRESULT result = SHGetFolderPath(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, my_documents);
+        root = std::string(my_documents) + sep;
+    }
+#endif
+#ifdef __linux__
+    {
+        struct passwd* pw = getpwuid(getuid());
+        const char* homedir = pw->pw_dir;
+        root = std::string(homedir) + sep + "Documents" + sep;
+    }
+#endif
+#ifdef __APPLE__
+    root = std::string("~") + sep + "Documents" + "sep";
+#endif
+
+
     auto stlpath = resolve_path(std::filesystem::absolute(root + "stl"));
     auto texturepath = resolve_path(std::filesystem::absolute(root + "texture"));
     openfile stl_openfile_dialog("open STL/OBJ file", stlpath.string(), {".stl", ".obj"});
@@ -263,40 +294,6 @@ int main(int, char**)
 
         ImGui::Begin("Magic Eye");
         
-        auto use_menubar = false;
-        if (use_menubar) {
-            if (ImGui::BeginMainMenuBar()) {
-                if (ImGui::BeginMenu("Stl")) {
-                    if (ImGui::MenuItem("Open", "", false, true)) {
-                        show_stl_openfile = true;
-                    }
-                    if (ImGui::BeginMenu("Open Recent")) {
-                        ImGui::EndMenu();
-                    }
-                    ImGui::EndMenu();
-                }
-                if (ImGui::BeginMenu("Texture")) {
-                    if (ImGui::MenuItem("Open", "", false, true)) {
-                        show_texture_openfile = true;
-                    }
-                    if (ImGui::BeginMenu("Open Recent")) {
-                        ImGui::EndMenu();
-                    }
-                    ImGui::EndMenu();
-                }
-                if (ImGui::BeginMenu("Edit")) {
-                    if (ImGui::MenuItem("Undo", "Ctrl+Z")) {}
-                    if (ImGui::MenuItem("Redo", "Ctrl+Y", false, false)) {} // Disabled item
-                    ImGui::Separator();
-                    if (ImGui::MenuItem("Cut", "Ctrl+X")) {}
-                    if (ImGui::MenuItem("Copy", "Ctrl+C")) {}
-                    if (ImGui::MenuItem("Paste", "Ctrl+V")) {}
-                    ImGui::EndMenu();
-                }
-                ImGui::EndMainMenuBar();
-            }
-        }
-
         // STL/OBJ
         ImGui::BeginDisabled(is_rendering);
 
@@ -452,6 +449,9 @@ int main(int, char**)
         if (CustomWidgets::InputFloat("Field of View", &fieldofview))
             stereogram_options->fov = fieldofview;
 
+        //////////////////////////////////////////////////
+        // Rotation
+        //////////////////////////////////////////////////
         static float rotation[3] = { stereogram_options->rot_deg[0], stereogram_options->rot_deg[1], stereogram_options->rot_deg[2] };
         ImGui::SetNextItemWidth(400);
         if (CustomWidgets::InputFloat3("Rotation", rotation)) {
@@ -624,6 +624,7 @@ int main(int, char**)
                 stereogram_options->stlpath = stl_openfile_dialog.selecteditem.string();
             }
         }
+
         if (show_texture_openfile) {
             const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
             ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 50, main_viewport->WorkPos.y + 20), ImGuiCond_FirstUseEver);
@@ -647,6 +648,7 @@ int main(int, char**)
 
         glfwSwapBuffers(window);
     }
+
 #ifdef __EMSCRIPTEN__
     EMSCRIPTEN_MAINLOOP_END;
 #endif
