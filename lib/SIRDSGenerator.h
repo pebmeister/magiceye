@@ -121,7 +121,8 @@ public:
 
         // 3. Initialize a random number generator for creating random colors if no texture is provided.
         // A fixed seed ensures the same input always produces the same output, which is good for debugging.
-        std::mt19937 rng(123456);
+        std::random_device rd;
+        std::mt19937 rng(rd());
         std::uniform_int_distribution<int> distr(0, 255);
 
         // 4. Pre-calculate the desired separation for every pixel based on its depth.
@@ -192,7 +193,7 @@ private:
     {
         std::vector<float> adjusted_depth(depth.size());
         for (size_t i = 0; i < depth.size(); i++) {
-            adjusted_depth[i] = depth[i] * (1.0f - bg_separation);
+            adjusted_depth[i] = std::max(0.0f, depth[i] * (1.0f - bg_separation));
         }
         return adjusted_depth;
     }
@@ -337,12 +338,9 @@ private:
 
         // Check the pixel directly above (previous scanline).
         if (y > 0) {
-            int above_root = uf.find(x);
-            if (above_root != x && is_root[above_root]) {
-                int above_idx = ((y - 1) * width + x) * 3;
-                color = { out_rgb[above_idx], out_rgb[above_idx + 1], out_rgb[above_idx + 2] };
-                return true;
-            }
+            int above_idx = ((y - 1) * width + x) * 3;
+            color = { out_rgb[above_idx], out_rgb[above_idx + 1], out_rgb[above_idx + 2] };
+            return true;
         }
 
         // Check the diagonal neighbor (up and left).
@@ -365,8 +363,9 @@ private:
         float brightness, float contrast)
     {
         // Map the output pixel coordinate to a texture coordinate.
-        float texX = static_cast<float>(x) * (static_cast<float>(tw) / width);
-        float texY = static_cast<float>(y) * (static_cast<float>(th) / height);
+        
+        float texX = std::clamp(static_cast<float>(x) * (static_cast<float>(tw) / width), 0.0f, tw - 1.0f);
+        float texY = std::clamp(static_cast<float>(y) * (static_cast<float>(th) / height), 0.0f, th - 1.0f);
 
         // Sample the texture using bilinear interpolation for smoothness.
         auto color = TextureSampler::sampleBilinear(texture, tw, th, tchan, texX, texY);
@@ -427,7 +426,7 @@ private:
         int idx = (y * width + x) * 3; // Index of the central pixel.
         for (int c = 0; c < 3; ++c) { // Process each color channel (R, G, B).
             // Sum of center pixel (weight 6) and 6 neighbors (weight 1 each) = total weight 12.
-            int sum = out_rgb[idx + c] * 6;
+            float sum = out_rgb[idx + c] * 6.0;
             // Add the four cardinal neighbors
             sum += out_rgb[((y - 1) * width + x) * 3 + c]; // Up
             sum += out_rgb[((y + 1) * width + x) * 3 + c]; // Down
@@ -437,7 +436,8 @@ private:
             sum += out_rgb[((y - 1) * width + (x - 1)) * 3 + c]; // Up-Left
             sum += out_rgb[((y + 1) * width + (x + 1)) * 3 + c]; // Down-Right
 
-            out_rgb[idx + c] = static_cast<uint8_t>(sum / options->smoothWeight);
+            float weight = std::max(options->smoothWeight, 1.0f);
+            out_rgb[idx + c] = static_cast<uint8_t>(sum / weight);
         }
     }
 };
