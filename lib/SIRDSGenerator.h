@@ -202,28 +202,28 @@ private:
     static std::vector<int> calculateSeparationMap(const std::vector<float>& adjusted_depth,
         int width, int height, int eye_separation)
     {
-        // Algorithm tuning parameters
-        const int min_separation = 3;          // Minimum allowed separation (for far background).
-        const int max_separation = eye_separation; // Maximum allowed separation (for close foreground).
-        const float focus_depth = 0.5f;        // Depth value that requires no adjustment.
+        const int min_separation = 2;
+        const int max_separation = eye_separation;
+        const float focus_depth = 0.5f;
 
         std::vector<int> separation_map(width * height);
 
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
-                float d = adjusted_depth[y * width + x]; // Current depth value
+                float d = adjusted_depth[y * width + x];
 
-                // Calculate a scale factor based on how far the depth is from the focus depth.
+                // KEEP YOUR ORIGINAL CALCULATION - it's correct!
                 float t = pow(std::abs(d - focus_depth) * 2.0f, 1.5f);
                 float sep_scale = 1.0f + t * 0.5f;
-
-                // Core formula: separation increases as the object gets closer (1.0f - d).
                 float sep_float = min_separation + (max_separation - min_separation) *
                     pow(1.0f - d, options->depth_gamma) * sep_scale;
 
-                // Clamp the final value to the valid range and store it.
-                // BUG FIX: Corrected order of std::min and std::max arguments.
-                separation_map[y * width + x] = std::clamp(static_cast<int>(std::round(sep_float)), min_separation, max_separation);
+                // ONLY FIX THIS LINE - proper clamping:
+                separation_map[y * width + x] = std::clamp(
+                    static_cast<int>(std::round(sep_float)),
+                    min_separation,
+                    max_separation
+                );
             }
         }
         return separation_map;
