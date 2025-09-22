@@ -362,6 +362,11 @@ private:
         int tw, int th, int tchan,
         float brightness, float contrast)
     {
+
+        if (tw <= 0 || th <= 0 || tchan < 3 || texture.empty()) {
+            return { 128, 128, 128 }; // fallback neutral color
+        }
+
         // Map the output pixel coordinate to a texture coordinate.
         
         float texX = std::clamp(static_cast<float>(x) * (static_cast<float>(tw) / width), 0.0f, tw - 1.0f);
@@ -432,6 +437,7 @@ private:
             sum += out_rgb[((y + 1) * width + x) * 3 + c]; // Down
             sum += out_rgb[(y * width + (x - 1)) * 3 + c]; // Left
             sum += out_rgb[(y * width + (x + 1)) * 3 + c]; // Right
+
             // Add two diagonal neighbors (optional, improves smoothness)
             sum += out_rgb[((y - 1) * width + (x - 1)) * 3 + c]; // Up-Left
             sum += out_rgb[((y + 1) * width + (x + 1)) * 3 + c]; // Down-Right

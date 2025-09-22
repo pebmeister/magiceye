@@ -36,7 +36,7 @@ public:
     bool custom_orth_scale_provided = false;
     bool laplace_smoothing = false;
     bool perspective = true;
-    float custom_orth_scale = 1;
+    float custom_orth_scale = 50;
     float fov = 45;
     float depth_near = 0.75f;
     float depth_far = 0.1f;
@@ -48,7 +48,7 @@ public:
     float orthTuneHi = 1.2f;
     float foreground_threshold = 0.90f;
     float smoothThreshold = 0.75;
-    float smoothWeight = 10;
+    float smoothWeight = 6;
     float rampWidth = 2.5;
     float rampHeight = 100.0;
     int laplace_smooth_layers = 15;
