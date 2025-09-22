@@ -22,7 +22,7 @@ public:
     std::string stlpath = "";
     std::string texpath = "";
     std::string outprefix = "out";
-    int width = 1200;
+    int width = 1280;
     int height = 800;
     int eye_sep = 160;
     glm::vec3 custom_cam_pos = { 0, 0, 0 };
