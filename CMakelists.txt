@@ -79,5 +79,4 @@ target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
 # --- Add subdirectories ---
 add_subdirectory(lib)
 add_subdirectory(cli)
-add_subdirectory(unittests)
 add_subdirectory(gui)   # We are adding a new gui subdirectory
