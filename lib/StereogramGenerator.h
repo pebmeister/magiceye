@@ -198,7 +198,7 @@ private:
     {
         TextureData data;
 
-        if (options->texpath != "null") {
+        if (options->texpath.empty() || options->texpath != "null") {
             if (TextureSampler::loadRGB(options->texpath, data.texture,
                 data.tw, data.th, data.tchan)) {
                 data.hasTexture = true;

@@ -25,6 +25,7 @@ public:
     int width = 1280;
     int height = 800;
     int eye_sep = 160;
+    int laplace_smooth_layers = 15;
     glm::vec3 custom_cam_pos = { 0, 0, 0 };
     glm::vec3 custom_look_at = { 0, 0, 0 };
     glm::vec3 rot_deg = { 0, 0, 0 };
@@ -51,5 +52,4 @@ public:
     float smoothWeight = 6;
     float rampWidth = 2.5;
     float rampHeight = 100.0;
-    int laplace_smooth_layers = 15;
 };
