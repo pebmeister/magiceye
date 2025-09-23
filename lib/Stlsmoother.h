@@ -4,8 +4,8 @@
 #include <unordered_map>
 #include <vector>
 #include <cmath>
-#include "Laplace.h"   // your Laplace smoothing header
-#include "stl.h"       // your STL class
+#include "Laplace.h"
+#include "stl.h"
 
 using glm::vec3;
 using Tri = glm::ivec3;

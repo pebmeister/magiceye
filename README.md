@@ -1,5 +1,7 @@
 Create stereogram
+Now includes a gui that sits on ImGui!
 
+CLI 
 Usage: magic_eye input.stl texture.png/null outprefix [options]
 
 Options:

@@ -279,8 +279,7 @@ int main(int, char**)
         // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
         // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
         glfwPollEvents();
-        if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0)
-        {
+        if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0) {
             ImGui_ImplGlfw_Sleep(10);
             continue;
         }
@@ -295,7 +294,7 @@ int main(int, char**)
         ImGui::SetNextWindowSize(ImVec2(1000, 600), ImGuiCond_FirstUseEver);
 
         ImGui::Begin("Magic Eye");
-        
+
         // STL/OBJ
         ImGui::BeginDisabled(is_rendering);
 
@@ -304,7 +303,7 @@ int main(int, char**)
         }
         ImGui::SameLine();
         auto stldisabled = stereogram_options->stlpath.empty();
-        
+
         ImGui::BeginDisabled(stldisabled);
         ImGui::LabelText("", "%s", stereogram_options->stlpath.c_str());
         ImGui::EndDisabled();
@@ -374,202 +373,131 @@ int main(int, char**)
         //////////////////////////////////////////////////
         // Width - Height
         //////////////////////////////////////////////////
-        static int window_size[2] = { stereogram_options->width, stereogram_options->height };
         ImGui::SetNextItemWidth(264);
-        if (CustomWidgets::InputInt2("Dimentions", window_size)) {
-            stereogram_options->width = window_size[0];
-            stereogram_options->height = window_size[1];
-        }
+        if (CustomWidgets::InputInt2("Dimentions", &stereogram_options->width)) {}
 
         //////////////////////////////////////////////////
         // Eye Seperation
         //////////////////////////////////////////////////
-        static int eye_sep = stereogram_options->eye_sep;
         ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::SliderInt("Eye separation", &eye_sep, 0, 250))
-            stereogram_options->eye_sep = eye_sep;
+        if (CustomWidgets::SliderInt("Eye separation", &stereogram_options->eye_sep, 0, 250)) {}
 
         //////////////////////////////////////////////////
         // Camera Pos
         //////////////////////////////////////////////////
-        static bool customcameraposchecked = stereogram_options->custom_cam_provided;
-        ImGui::BeginDisabled(!customcameraposchecked);
-        static float camera_pos[3] = { stereogram_options->custom_cam_pos[0], stereogram_options->custom_cam_pos[1], stereogram_options->custom_cam_pos[2]};
+        ImGui::BeginDisabled(!stereogram_options->custom_cam_provided);
         ImGui::SetNextItemWidth(400);
-        if (CustomWidgets::InputFloat3("Camera pos", camera_pos)) {
-            stereogram_options->custom_cam_pos[0] = camera_pos[0];
-            stereogram_options->custom_cam_pos[1] = camera_pos[1];
-            stereogram_options->custom_cam_pos[2] = camera_pos[2];
-        }
+        if (CustomWidgets::InputFloat3("Camera pos", &stereogram_options->custom_cam_pos[0])) {}
         ImGui::EndDisabled();
         ImGui::SameLine();
-        if (ImGui::Checkbox("Use Custom camera pos", &customcameraposchecked))
-            stereogram_options->custom_cam_provided = customcameraposchecked;
+        if (ImGui::Checkbox("Use Custom camera pos", &stereogram_options->custom_cam_provided)) {}
 
         //////////////////////////////////////////////////
         // Look At
         //////////////////////////////////////////////////
-        static bool customlookatchecked = stereogram_options->custom_lookat_provided;
-        ImGui::BeginDisabled(!customlookatchecked);
-        static float look_pos[3] = { stereogram_options->custom_look_at[0], stereogram_options->custom_look_at[1], stereogram_options->custom_look_at[2] };
+        ImGui::BeginDisabled(!stereogram_options->custom_lookat_provided);
         ImGui::SetNextItemWidth(400);
-        if (CustomWidgets::InputFloat3("Look at", look_pos)) {
-            stereogram_options->custom_look_at[0] = look_pos[0];
-            stereogram_options->custom_look_at[1] = look_pos[1];
-            stereogram_options->custom_look_at[2] = look_pos[2];
-        }
+        if (CustomWidgets::InputFloat3("Look at", &stereogram_options->custom_look_at[0])) {}
         ImGui::EndDisabled();
         ImGui::SameLine();
-        if (ImGui::Checkbox("Use Custom look at", &customlookatchecked)) {
-            stereogram_options->custom_lookat_provided = customlookatchecked;
-        }
+        if (ImGui::Checkbox("Use Custom look at", &stereogram_options->custom_lookat_provided)) {}
 
         //////////////////////////////////////////////////
         // Orthtagonal scale
         //////////////////////////////////////////////////
-        static bool customorthscalechecked = stereogram_options->custom_orth_scale_provided;
-        ImGui::BeginDisabled(!customorthscalechecked);
-        static float orthscale = stereogram_options->custom_orth_scale;
+        ImGui::BeginDisabled(!stereogram_options->custom_orth_scale_provided);
         ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("ortho scale", &orthscale))
-            stereogram_options->custom_orth_scale = orthscale;
-
-        ImGui::EndDisabled();
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(261);
-        ImGui::LabelText("","%s","");
-        ImGui::SameLine();
-        if (ImGui::Checkbox("Use Custom orthogonal scale", &customorthscalechecked))
-            stereogram_options->custom_orth_scale_provided = customorthscalechecked;
-        
-        //////////////////////////////////////////////////
-        // Laplace smoothing
-        //////////////////////////////////////////////////
-        static bool uselaplacechecked = stereogram_options->laplace_smoothing;
-        ImGui::BeginDisabled(!uselaplacechecked);
-        static int laplacelayers = stereogram_options->laplace_smooth_layers;
-        ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputInt("Laplace layers", &laplacelayers))
-            stereogram_options->laplace_smooth_layers = laplacelayers;
+        if (CustomWidgets::InputFloat("ortho scale", &stereogram_options->custom_orth_scale)) {}
         ImGui::EndDisabled();
         ImGui::SameLine();
         ImGui::SetNextItemWidth(261);
         ImGui::LabelText("", "%s", "");
         ImGui::SameLine();
-        if (ImGui::Checkbox("Use Laplace smoothing", &uselaplacechecked))
-            stereogram_options->laplace_smoothing = uselaplacechecked;
+        if (ImGui::Checkbox("Use Custom orthogonal scale", &stereogram_options->custom_orth_scale_provided)) {}
+        //////////////////////////////////////////////////
+        // Laplace smoothing
+        //////////////////////////////////////////////////
+        ImGui::BeginDisabled(!stereogram_options->laplace_smoothing);
+        ImGui::SetNextItemWidth(130);
+        if (CustomWidgets::InputInt("Laplace layers", &stereogram_options->laplace_smooth_layers)) {}
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(261);
+        ImGui::LabelText("", "%s", "");
+        ImGui::SameLine();
+        if (ImGui::Checkbox("Use Laplace smoothing", &stereogram_options->laplace_smoothing)) {}
 
         //////////////////////////////////////////////////
         // Field of view
         //////////////////////////////////////////////////
-        static float fieldofview = stereogram_options->fov;
         ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Field of View", &fieldofview))
-            stereogram_options->fov = fieldofview;
+        if (CustomWidgets::InputFloat("Field of View", &stereogram_options->fov)) {}
 
         //////////////////////////////////////////////////
         // Rotation
         //////////////////////////////////////////////////
-        static float rotation[3] = { stereogram_options->rot_deg[0], stereogram_options->rot_deg[1], stereogram_options->rot_deg[2] };
         ImGui::SetNextItemWidth(400);
-        if (CustomWidgets::InputFloat3("Rotation", rotation)) {
-            stereogram_options->rot_deg[0] = rotation[0];
-            stereogram_options->rot_deg[1] = rotation[1];
-            stereogram_options->rot_deg[2] = rotation[2];
-        }
+        if (CustomWidgets::InputFloat3("Rotation", &stereogram_options->rot_deg[0])) {}
 
         //////////////////////////////////////////////////
         // Translation
         //////////////////////////////////////////////////
-        static float translation[3] = { stereogram_options->trans[0], stereogram_options->trans[1], stereogram_options->trans[2] };
         ImGui::SetNextItemWidth(400);
-        if (CustomWidgets::InputFloat3("Translation", translation)) {
-            stereogram_options->trans[0] = translation[0];
-            stereogram_options->trans[1] = translation[1];
-            stereogram_options->trans[2] = translation[2];
-        }
+        if (CustomWidgets::InputFloat3("Translation", &stereogram_options->trans[0])) {}
 
         //////////////////////////////////////////////////
         // Scale
         //////////////////////////////////////////////////
-        static float scale[3] = { stereogram_options->sc[0], stereogram_options->sc[1], stereogram_options->sc[2] };
         ImGui::SetNextItemWidth(400);
-        if (CustomWidgets::InputFloat3("Scale", scale)) {
-            stereogram_options->sc[0] = scale[0];
-            stereogram_options->sc[1] = scale[1];
-            stereogram_options->sc[2] = scale[2];
-        }
+        if (CustomWidgets::InputFloat3("Scale", &stereogram_options->sc[0])) {}
 
         //////////////////////////////////////////////////
         // Shear
         //////////////////////////////////////////////////
-        static float shear[3] = { stereogram_options->shear[0], stereogram_options->shear[1], stereogram_options->shear[2] };
         ImGui::SetNextItemWidth(400);
-        if (CustomWidgets::InputFloat3("Shear", shear)) {
-            stereogram_options->shear[0] = shear[0];
-            stereogram_options->shear[1] = shear[1];
-            stereogram_options->shear[2] = shear[2];
-        }
+        if (CustomWidgets::InputFloat3("Shear", &stereogram_options->shear[0])) {}
 
         //////////////////////////////////////////////////
         // Depth near far
         //////////////////////////////////////////////////
-        static float depth[2] = { stereogram_options->depth_near, stereogram_options->depth_far };
         ImGui::SetNextItemWidth(263);
-        if (CustomWidgets::InputFloat2("Depth", depth)) {
-            stereogram_options->depth_near = depth[0];
-            stereogram_options->depth_far = depth[1];
-        }
+        if (CustomWidgets::InputFloat2("Depth", &stereogram_options->depth_near)) {}
 
         //////////////////////////////////////////////////
         // Brightness
         //////////////////////////////////////////////////
-        static float brightness = stereogram_options->texture_brightness;
         ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Brightness", &brightness))
-            stereogram_options->texture_brightness = brightness;
+        if (CustomWidgets::InputFloat("Brightness", &stereogram_options->texture_brightness)) {}
 
         //////////////////////////////////////////////////
         // Contrast
         //////////////////////////////////////////////////
-        static float contrast = stereogram_options->texture_contrast;
         ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Contrast", &contrast))
-            stereogram_options->texture_contrast = contrast;
+        if (CustomWidgets::InputFloat("Contrast", &stereogram_options->texture_contrast)) {}
 
         //////////////////////////////////////////////////
         // Eye Seperation
         //////////////////////////////////////////////////
-        static float sep = stereogram_options->bg_separation;
         ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Separation", &sep))
-            stereogram_options->bg_separation = sep;        
+        if (CustomWidgets::InputFloat("Separation", &stereogram_options->bg_separation)) {}
 
         //////////////////////////////////////////////////
         // Depth Gama
         //////////////////////////////////////////////////
-        static float gama = stereogram_options->depth_gamma;
         ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Depth gama", &gama))
-            stereogram_options->depth_gamma = gama;
+        if (CustomWidgets::InputFloat("Depth gama", &stereogram_options->depth_gamma)) {}
 
         //////////////////////////////////////////////////
         // Orthtagonal Tuning hi lo
         //////////////////////////////////////////////////
-        static float orthtune[2] = { stereogram_options->orthTuneLow, stereogram_options->orthTuneHi };
         ImGui::SetNextItemWidth(263);
-        if (CustomWidgets::InputFloat2("Orth tune", depth)) {
-            stereogram_options->orthTuneLow = orthtune[0];
-            stereogram_options->orthTuneHi = orthtune[1];
-        }
+        if (CustomWidgets::InputFloat2("Orth tune", &stereogram_options->orthTuneLow)) {}
 
         //////////////////////////////////////////////////
         // Foreground Threshhold
         //////////////////////////////////////////////////
-        static float forethresh = stereogram_options->foreground_threshold;
         ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Foreground", &forethresh))
-            stereogram_options->foreground_threshold = forethresh;
+        if (CustomWidgets::InputFloat("Foreground", &stereogram_options->foreground_threshold)) {}
 
         //////////////////////////////////////////////////
         // Smooth Threshhold
@@ -582,30 +510,36 @@ int main(int, char**)
         //////////////////////////////////////////////////
         // Smooth Weight
         //////////////////////////////////////////////////
-        static float smoothweight = stereogram_options->smoothWeight;
         ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Smooth weight", &smoothweight))
-            stereogram_options->smoothWeight = smoothweight;
+        if (CustomWidgets::InputFloat("Smooth weight", &stereogram_options->smoothWeight)) {}
 
         //////////////////////////////////////////////////
         // Ramp width height
         //////////////////////////////////////////////////
-        static float ramp[2] = { stereogram_options->rampWidth, stereogram_options->rampHeight };
         ImGui::SetNextItemWidth(263);
-        if (CustomWidgets::InputFloat2("Ramp", ramp)) {
-            stereogram_options->rampWidth = ramp[0];
-            stereogram_options->rampHeight = ramp[1];
-        }
+        if (CustomWidgets::InputFloat2("Ramp", &stereogram_options->rampWidth)) {}
 
         //////////////////////////////////////////////////
         // Perspective
         //////////////////////////////////////////////////
-        static bool perspective = stereogram_options->perspective;
         ImGui::SetNextItemWidth(130);
-        if (ImGui::Checkbox("Perspective", &perspective))
-            stereogram_options->perspective = perspective;
+        if (ImGui::Checkbox("Perspective", &stereogram_options->perspective)) {}
 
+        //////////////////////////////////////////////////
+        // Reset
+        //////////////////////////////////////////////////
+        if (ImGui::Button("Reset Options")) {
+            auto& stl = stereogram_options->stlpath;
+            auto& texture = stereogram_options->texpath;
+            auto options = std::make_shared<Options>();
+            options->stlpath = stl;
+            options->texpath = texture;
+            stereogram_options = options;
+        }
+        //////////////////////////////////////////////////
         // Render
+        //////////////////////////////////////////////////
+        // 
         if (ImGui::Button("Render")) {
             is_rendering = true;
             render_image = false;
@@ -628,6 +562,7 @@ int main(int, char**)
                     return false;
                 });
         }
+
 
         ImGui::EndDisabled();
         ImGui::EndDisabled();

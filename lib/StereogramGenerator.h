@@ -172,7 +172,8 @@ private:
         float aspect = static_cast<float>(options->width) / options->height;
         // Compute default orthographic scale based on mesh span, screen aspect ratio, 
         // and empirical tuning factors (0.6f and 1.2f) to ensure object fits comfortably in view.
-        return span * options->orthTuneLow * std::max(1.0f / aspect, 1.0f) * options->orthTuneHi;
+        auto scale = span * options->orthTuneLow * std::max(1.0f / aspect, 1.0f) * options->orthTuneHi;
+        return scale;
     }
 
     // Save depth map visualization as grayscale PNG
@@ -197,7 +198,7 @@ private:
     {
         TextureData data;
 
-        if (options->texpath != "null") {
+        if (options->texpath.empty() || options->texpath != "null") {
             if (TextureSampler::loadRGB(options->texpath, data.texture,
                 data.tw, data.th, data.tchan)) {
                 data.hasTexture = true;

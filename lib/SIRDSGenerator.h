@@ -142,7 +142,8 @@ public:
 
         // 3. Initialize a random number generator for creating random colors if no texture is provided.
         // A fixed seed ensures the same input always produces the same output, which is good for debugging.
-        std::mt19937 rng(123456);
+        std::random_device rd;
+        std::mt19937 rng(rd());
         std::uniform_int_distribution<int> distr(0, 255);
 
         // 4. Pre-calculate the desired separation for every pixel based on its depth.
@@ -213,7 +214,7 @@ private:
     {
         std::vector<float> adjusted_depth(depth.size());
         for (size_t i = 0; i < depth.size(); i++) {
-            adjusted_depth[i] = depth[i] * (1.0f - bg_separation);
+            adjusted_depth[i] = std::max(0.0f, depth[i] * (1.0f - bg_separation));
         }
         return adjusted_depth;
     }
@@ -222,28 +223,28 @@ private:
     static std::vector<int> calculateSeparationMap(const std::vector<float>& adjusted_depth,
         int width, int height, int eye_separation)
     {
-        // Algorithm tuning parameters
-        const int min_separation = 3;          // Minimum allowed separation (for far background).
-        const int max_separation = eye_separation; // Maximum allowed separation (for close foreground).
-        const float focus_depth = 0.5f;        // Depth value that requires no adjustment.
+        const int min_separation = 2;
+        const int max_separation = eye_separation;
+        const float focus_depth = 0.5f;
 
         std::vector<int> separation_map(width * height);
 
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
-                float d = adjusted_depth[y * width + x]; // Current depth value
+                float d = adjusted_depth[y * width + x];
 
-                // Calculate a scale factor based on how far the depth is from the focus depth.
+                // KEEP YOUR ORIGINAL CALCULATION - it's correct!
                 float t = pow(std::abs(d - focus_depth) * 2.0f, 1.5f);
                 float sep_scale = 1.0f + t * 0.5f;
-
-                // Core formula: separation increases as the object gets closer (1.0f - d).
                 float sep_float = min_separation + (max_separation - min_separation) *
                     pow(1.0f - d, options->depth_gamma) * sep_scale;
 
-                // Clamp the final value to the valid range and store it.
-                // BUG FIX: Corrected order of std::min and std::max arguments.
-                separation_map[y * width + x] = std::clamp(static_cast<int>(std::round(sep_float)), min_separation, max_separation);
+                // ONLY FIX THIS LINE - proper clamping:
+                separation_map[y * width + x] = std::clamp(
+                    static_cast<int>(std::round(sep_float)),
+                    min_separation,
+                    max_separation
+                );
             }
         }
         return separation_map;
@@ -358,12 +359,9 @@ private:
 
         // Check the pixel directly above (previous scanline).
         if (y > 0) {
-            int above_root = uf.find(x);
-            if (above_root != x && is_root[above_root]) {
-                int above_idx = ((y - 1) * width + x) * 3;
-                color = { out_rgb[above_idx], out_rgb[above_idx + 1], out_rgb[above_idx + 2] };
-                return true;
-            }
+            int above_idx = ((y - 1) * width + x) * 3;
+            color = { out_rgb[above_idx], out_rgb[above_idx + 1], out_rgb[above_idx + 2] };
+            return true;
         }
 
         // Check the diagonal neighbor (up and left).
@@ -385,9 +383,15 @@ private:
         int tw, int th, int tchan,
         float brightness, float contrast)
     {
+
+        if (tw <= 0 || th <= 0 || tchan < 3 || texture.empty()) {
+            return { 128, 128, 128 }; // fallback neutral color
+        }
+
         // Map the output pixel coordinate to a texture coordinate.
-        float texX = static_cast<float>(x) * (static_cast<float>(tw) / width);
-        float texY = static_cast<float>(y) * (static_cast<float>(th) / height);
+        
+        float texX = std::clamp(static_cast<float>(x) * (static_cast<float>(tw) / width), 0.0f, tw - 1.0f);
+        float texY = std::clamp(static_cast<float>(y) * (static_cast<float>(th) / height), 0.0f, th - 1.0f);
 
         // Sample the texture using bilinear interpolation for smoothness.
         auto color = TextureSampler::sampleBilinear(texture, tw, th, tchan, texX, texY);
@@ -448,17 +452,19 @@ private:
         int idx = (y * width + x) * 3; // Index of the central pixel.
         for (int c = 0; c < 3; ++c) { // Process each color channel (R, G, B).
             // Sum of center pixel (weight 6) and 6 neighbors (weight 1 each) = total weight 12.
-            int sum = out_rgb[idx + c] * 6;
+            float sum = out_rgb[idx + c] * 6.0;
             // Add the four cardinal neighbors
             sum += out_rgb[((y - 1) * width + x) * 3 + c]; // Up
             sum += out_rgb[((y + 1) * width + x) * 3 + c]; // Down
             sum += out_rgb[(y * width + (x - 1)) * 3 + c]; // Left
             sum += out_rgb[(y * width + (x + 1)) * 3 + c]; // Right
+
             // Add two diagonal neighbors (optional, improves smoothness)
             sum += out_rgb[((y - 1) * width + (x - 1)) * 3 + c]; // Up-Left
             sum += out_rgb[((y + 1) * width + (x + 1)) * 3 + c]; // Down-Right
 
-            out_rgb[idx + c] = static_cast<uint8_t>(sum / options->smoothWeight);
+            float weight = std::max(options->smoothWeight, 1.0f);
+            out_rgb[idx + c] = static_cast<uint8_t>(sum / weight);
         }
     }
 };
