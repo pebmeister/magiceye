@@ -41,6 +41,16 @@
  * 3. Call `SIRDSGenerator::generate(...)` with the desired parameters.
  * 4. The resulting 3-channel RGB image will be populated in the `out_rgb` vector.
  *
+ * Example:
+ * @code
+ * std::vector<float> depth_map(width * height, 0.5f);
+ * std::vector<uint8_t> texture; // Optional
+ * std::vector<uint8_t> out_rgb;
+ * auto options = std::make_shared<Options>();
+ * SIRDSGenerator::generate(depth_map, width, height, 160, texture, tw, th, tchan, out_rgb, 1.0f, 1.0f, 0.6f, options);
+ * // out_rgb now contains the stereogram image
+ * @endcode
+ *
  * @note The output image is best viewed using the "parallel viewing" or "cross-eyed" method.
  */
 class SIRDSGenerator {
@@ -49,33 +59,37 @@ public:
     static std::shared_ptr<Options> options;
 
 public:
-    /// Enumeration of available algorithm methods for generating the SIRDS.
+    /**
+     * @enum Method
+     * @brief Algorithm selection for SIRDS generation.
+     *
+     * - UnionFind: Uses a disjoint-set data structure for robust, cycle-free pixel linking.
+     * - Recursive: [Not implemented] Placeholder for future alternative algorithms.
+     */
     enum class Method {
         UnionFind,  ///< The primary, robust method using a Union-Find data structure. Efficient and prevents cycles.
         Recursive   ///< [Placeholder] A potential alternative method. Not currently implemented.
     };
 
     /**
-     * @brief Main public interface for generating a SIRDS image.
-     *
-     * @param depth Input grayscale depth map. Values should be normalized [0.0, 1.0],
-     *              where 1.0 is closest (foreground) and 0.0 is farthest (background).
-     * @param width Width of the output image and the depth map.
-     * @param height Height of the output image and the depth map.
-     * @param eye_separation The maximum horizontal separation between left/right eye points (in pixels).
-     *                       This controls the maximum perceived depth.
-     * @param texture Optional texture image to color the output. If empty, random colors are used.
-     * @param tw Width of the texture image.
-     * @param th Height of the texture image.
-     * @param tchan Number of channels in the texture image (e.g., 3 for RGB, 4 for RGBA).
-     * @param[out] out_rgb Output vector for the generated RGB image data. Will be resized to `width * height * 3`.
-     * @param texture_brightness Brightness multiplier for the texture sampling.
-     * @param texture_contrast Contrast adjustment for the texture sampling.
-     * @param bg_separation Factor to scale depth values, controlling background separation.
-     *                      Higher values push the background further away.
-     * @param opt Shared pointer to the Options object containing algorithm parameters (e.g., thresholds, gamma).
-     * @param method The generation method to use. Currently only `Method::UnionFind` is implemented.
-     *               The parameter is retained for future compatibility.
+     * @brief Main entry point for generating a SIRDS image.
+     * @details
+     * Selects the generation method (currently only UnionFind is implemented) and produces a stereogram
+     * from a normalized depth map. See generateUnionFind for algorithm details.
+     * @param depth Normalized depth map [0.0, 1.0], 1.0 = foreground, 0.0 = background.
+     * @param width Image width in pixels.
+     * @param height Image height in pixels.
+     * @param eye_separation Maximum horizontal separation for stereoscopic effect (pixels).
+     * @param texture Optional texture image for coloring. If empty, random colors are used.
+     * @param tw Texture width.
+     * @param th Texture height.
+     * @param tchan Texture channels (e.g., 3=RGB).
+     * @param[out] out_rgb Output RGB image buffer, resized to width*height*3.
+     * @param texture_brightness Brightness multiplier for texture sampling.
+     * @param texture_contrast Contrast adjustment for texture sampling.
+     * @param bg_separation Background separation scaling factor.
+     * @param opt Shared pointer to Options object (algorithm parameters).
+     * @param method Generation method (default: UnionFind).
      */
     static void generate(const std::vector<float>& depth, int width, int height,
         int eye_separation, const std::vector<uint8_t>& texture,
@@ -93,19 +107,26 @@ public:
     }
 
     /**
-     * @brief Generates a SIRDS using the Union-Find algorithm.
-     *
+     * @brief Generates a SIRDS image using the Union-Find algorithm.
      * @details
-     * This is the core implementation. It works in several stages:
-     * 1.  **Depth Adjustment:** Scales the input depth values.
-     * 2.  **Output Initialization:** Prepares the output buffer.
-     * 3.  **Separation Map Calculation:** Pre-computes how far each pixel's "right eye" counterpart should be.
-     * 4.  **Scanline Processing:** Processes each row of the image from top to bottom:
-     *     - **Build Unions:** Links pixels on the same row that must share a color.
-     *     - **Identify Roots:** Finds the representative for each group of linked pixels.
-     *     - **Assign Colors:** Gives a color to each root (propagating from neighbors or generating new ones).
-     *     - **Apply Colors:** Fills in the color for every pixel in the group based on its root.
-     * 5.  **Edge Smoothing:** Applies a filter to reduce noise on the edges of foreground objects.
+     * Implements the core stereogram generation algorithm:
+     *  - Adjusts depth values for background separation.
+     *  - Calculates pixel separation based on depth and gamma.
+     *  - Links pixels using Union-Find to enforce stereoscopic constraints.
+     *  - Assigns colors via texture sampling or random generation.
+     *  - Smooths edges in the foreground to reduce noise.
+     * @param depth Normalized depth map.
+     * @param width Image width.
+     * @param height Image height.
+     * @param eye_separation Maximum separation for stereoscopic effect.
+     * @param texture Optional texture image.
+     * @param tw Texture width.
+     * @param th Texture height.
+     * @param tchan Texture channels.
+     * @param[out] out_rgb Output RGB image buffer.
+     * @param texture_brightness Brightness multiplier.
+     * @param texture_contrast Contrast adjustment.
+     * @param bg_separation Background separation scaling factor.
      */
     static void generateUnionFind(const std::vector<float>& depth, int width, int height,
         int eye_separation, const std::vector<uint8_t>& texture,
@@ -282,7 +303,7 @@ private:
         }
     }
 
-    /// Assigns a color to each root pixel, prioritizing propagation from neighbors.
+    /// Assigns a color to each root pixel, propagating from neighbors if possible.
     static void assignColors(int y, int width, int height,
         const std::vector<float>& adjusted_depth,
         UnionFind& uf, const std::vector<bool>& is_root,
