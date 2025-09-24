@@ -239,7 +239,6 @@ private:
                 float sep_float = min_separation + (max_separation - min_separation) *
                     pow(1.0f - d, options->depth_gamma) * sep_scale;
 
-                // ONLY FIX THIS LINE - proper clamping:
                 separation_map[y * width + x] = std::clamp(
                     static_cast<int>(std::round(sep_float)),
                     min_separation,
@@ -388,8 +387,7 @@ private:
             return { 128, 128, 128 }; // fallback neutral color
         }
 
-        // Map the output pixel coordinate to a texture coordinate.
-        
+        // Map the output pixel coordinate to a texture coordinate.        
         float texX = std::clamp(static_cast<float>(x) * (static_cast<float>(tw) / width), 0.0f, tw - 1.0f);
         float texY = std::clamp(static_cast<float>(y) * (static_cast<float>(th) / height), 0.0f, th - 1.0f);
 
@@ -399,8 +397,11 @@ private:
         // Apply brightness and contrast adjustments.
         for (int c = 0; c < 3; c++) {
             float val = color[c] / 255.0f;
-            val = ((val - 0.5f) * contrast) + 0.5f; // Apply contrast
-            val *= brightness;                       // Apply brightness
+            val = ((val - 0.5f) * contrast) + 0.5f;     // Apply contrast
+            val *= brightness;                          // Apply brightness
+            if (val < 0 || val > 1) {
+                val;
+            }
             color[c] = static_cast<uint8_t>(std::clamp(val * 255.0f, 0.0f, 255.0f));
         }
 

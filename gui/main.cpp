@@ -270,7 +270,8 @@ int main(int, char**)
     io.IniFilename = nullptr;
     EMSCRIPTEN_MAINLOOP_BEGIN
 #else
-    while (!glfwWindowShouldClose(window))
+    bool openMain = true;
+    while (openMain && !glfwWindowShouldClose(window))
 #endif
     {
         // Poll and handle events (inputs, window resize, etc.)
@@ -291,9 +292,9 @@ int main(int, char**)
 
         const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 50, main_viewport->WorkPos.y + 50), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(1000, 600), ImGuiCond_FirstUseEver);
-
-        ImGui::Begin("Magic Eye");
+        ImGui::SetNextWindowSize(ImVec2(1000, 640), ImGuiCond_FirstUseEver);
+    
+        ImGui::Begin("Magic Eye", &openMain);
 
         // STL/OBJ
         ImGui::BeginDisabled(is_rendering);
@@ -414,6 +415,7 @@ int main(int, char**)
         ImGui::LabelText("", "%s", "");
         ImGui::SameLine();
         if (ImGui::Checkbox("Use Custom orthogonal scale", &stereogram_options->custom_orth_scale_provided)) {}
+       
         //////////////////////////////////////////////////
         // Laplace smoothing
         //////////////////////////////////////////////////

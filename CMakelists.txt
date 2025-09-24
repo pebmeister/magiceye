@@ -31,6 +31,14 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(pebmeister_stl)
 
 # --- Fetch GLM (header-only) ---
+# Top-level CMakeLists.txt
+
+# Force static runtime for all MSVC targets (including dependencies)
+if(MSVC)
+    set(USE_MSVC_RUNTIME_LIBRARY_DLL OFF CACHE BOOL "Use MSVC runtime DLL")
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "MSVC runtime")
+endif()
+
 FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm.git
