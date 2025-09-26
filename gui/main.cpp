@@ -502,18 +502,25 @@ int main(int, char**)
         if (CustomWidgets::InputFloat("Foreground", &stereogram_options->foreground_threshold)) {}
 
         //////////////////////////////////////////////////
+        // Smooth Edges
+        //////////////////////////////////////////////////
+        if (ImGui::Checkbox("Smooth Edges", &stereogram_options->smoothEdges)) {}
+
+        ImGui::BeginDisabled(!stereogram_options->smoothEdges);
+
+        //////////////////////////////////////////////////
         // Smooth Threshhold
         //////////////////////////////////////////////////
-        static float smooththresh = stereogram_options->smoothThreshold;
         ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Smooth thresh", &smooththresh))
-            stereogram_options->smoothThreshold = smooththresh;
+        if (CustomWidgets::InputFloat("Smooth thresh", &stereogram_options->smoothThreshold)) {}
 
         //////////////////////////////////////////////////
         // Smooth Weight
         //////////////////////////////////////////////////
         ImGui::SetNextItemWidth(130);
         if (CustomWidgets::InputFloat("Smooth weight", &stereogram_options->smoothWeight)) {}
+
+        ImGui::EndDisabled();
 
         //////////////////////////////////////////////////
         // Ramp width height

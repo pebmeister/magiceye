@@ -37,6 +37,7 @@ public:
     bool custom_orth_scale_provided = false;
     bool laplace_smoothing = false;
     bool perspective = true;
+    bool smoothEdges = true;
     float custom_orth_scale = 50;
     float fov = 45;
     float depth_near = 0.75f;
