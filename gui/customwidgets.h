@@ -1,11 +1,19 @@
 
 #pragma once
 
-#include "imgui.h"
-
 namespace CustomWidgets
 {
-    void LoadingSpinner(const char* label, float radius, int thickness);
+
+    bool KnobWithIndicator(const char* label,
+        float* v,
+        float v_min,
+        float v_max,
+        float size = 64.0f,
+        int bar_segments = 16,
+        float bar_height = 10.0f,
+        float bar_gap = 2.0f);
+
+        void LoadingSpinner(const char* label, float radius, int thickness);
 
     bool SliderInt(const char* label, int* v, int v_min, int v_max, const char* format = "%d", ImGuiSliderFlags flags = 0);     // adjust format to decorate the value with a prefix or a suffix for in-slider labels or unit display.
     bool SliderInt2(const char* label, int v[2], int v_min, int v_max, const char* format = "%d", ImGuiSliderFlags flags = 0);

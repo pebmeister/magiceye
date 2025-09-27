@@ -2,6 +2,10 @@
 
 #pragma once
 #include <vector>
+#include <limits>
+#include <algorithm>
+#include <cmath>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -12,11 +16,6 @@
 /**
  * @class DepthMapGenerator
  * @brief A utility class for generating depth maps from 3D meshes.
- *
- * This class provides functionality to generate depth maps by projecting
- * 3D meshes onto a 2D plane using a camera model. The depth map represents
- * the distance of each pixel from the camera, enabling applications such as
- * stereograms, 3D visualization, and more.
  */
 class DepthMapGenerator {
 private:
@@ -26,7 +25,7 @@ private:
         float cx, float cy, float& u, float& v, float& w)
     {
         float denom = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
-        if (fabs(denom) < tolerance) return false;
+        if (std::fabs(denom) < tolerance) return false;
         u = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / denom;
         v = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / denom;
         w = 1.0f - u - v;
@@ -105,7 +104,6 @@ private:
         int miny = std::max(0, static_cast<int>(std::floor(std::min({ py[0], py[1], py[2] }))));
         int maxy = std::min(height - 1, static_cast<int>(std::ceil(std::max({ py[0], py[1], py[2] }))));
 
-        // Precompute barycentric denominator once
         float denom = (py[1] - py[2]) * (px[0] - px[2]) + (px[2] - px[1]) * (py[0] - py[2]);
         if (std::fabs(denom) < tolerance) return;
         float invDenom = 1.0f / denom;
@@ -115,7 +113,6 @@ private:
                 float px_center = x + 0.5f;
                 float py_center = y + 0.5f;
 
-                // Compute barycentrics directly with invDenom
                 float u = ((py[1] - py[2]) * (px_center - px[2]) +
                     (px[2] - px[1]) * (py_center - py[2])) * invDenom;
                 float v = ((py[2] - py[0]) * (px_center - px[2]) +
@@ -132,49 +129,6 @@ private:
                     zbuffer[idx] = z_interp;
                 }
             }
-        }
-    }
-
-    static inline void rasterizeTriangle1(const float ndc_x[3], const float ndc_y[3], const float zcam[3],
-        int width, int height, std::vector<float>& zbuffer)
-    {
-        float px[3]{}, py[3]{};
-        for (int i = 0; i < 3; i++) {
-            float clx = std::max(-1.0f, std::min(1.0f, ndc_x[i]));
-            float cly = std::max(-1.0f, std::min(1.0f, ndc_y[i]));
-            px[i] = (clx * 0.5f + 0.5f) * (width - 1);
-            py[i] = (-cly * 0.5f + 0.5f) * (height - 1);
-        }
-
-        int minx = std::max(0, static_cast<int>(std::floor(std::min({ px[0], px[1], px[2] }))));
-        int maxx = std::min(width - 1, static_cast<int>(std::ceil(std::max({ px[0], px[1], px[2] }))));
-        int miny = std::max(0, static_cast<int>(std::floor(std::min({ py[0], py[1], py[2] }))));
-        int maxy = std::min(height - 1, static_cast<int>(std::ceil(std::max({ py[0], py[1], py[2] }))));
-
-        float denom = (py[1] - py[2]) * (px[0] - px[2]) + (px[2] - px[1]) * (py[0] - py[2]);
-        if (std::fabs(denom) < tolerance) return;
-
-        for (int y = miny; y <= maxy; ++y) {
-            for (int x = minx; x <= maxx; ++x) {
-                processPixel(x, y, px, py, zcam, width, zbuffer);
-            }
-        }
-    }
-
-    static inline void processPixel(int x, int y, const float px[3], const float py[3],
-        const float zcam[3], int width, std::vector<float>& zbuffer)
-    {
-        float u, v, w;
-        if (!barycentric2D(x + 0.5f, y + 0.5f, px[0], py[0], px[1], py[1], px[2], py[2], u, v, w))
-            return;
-        if (u < 0 || v < 0 || w < 0) return;
-
-        float z_interp = u * zcam[0] + v * zcam[1] + w * zcam[2];
-        if (z_interp <= 0.0f) return;
-
-        int idx = y * width + x;
-        if (z_interp < zbuffer[idx]) {
-            zbuffer[idx] = z_interp;
         }
     }
 

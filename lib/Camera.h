@@ -6,7 +6,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <numbers>
-#include "Options.h"
 
 class Camera {
 public:
@@ -15,6 +14,8 @@ public:
     glm::vec3 up;
     float fov_deg;
     bool perspective;
+
+    static constexpr float kEpsilon = 1e-6f;
 
     Camera() : position(0, 0, 0), look_at(0, 0, 0), up(0, 1, 0),
         fov_deg(45), perspective(true)
@@ -31,7 +32,7 @@ public:
     bool projectToNDC(const glm::vec3& p_cam, float aspect, float& ndc_x, float& ndc_y, float& zcam) const
     {
         zcam = p_cam.z;
-        if (zcam <= tolerance) return false;
+        if (zcam <= kEpsilon) return false;
 
         if (perspective) {
             float fov_rad = fov_deg * (std::numbers::pi / 180.0f);

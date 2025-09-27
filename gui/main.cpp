@@ -572,6 +572,10 @@ int main(int, char**)
                 });
         }
 
+        static float volume = 0.5f;
+        if (CustomWidgets:: KnobWithIndicator("Volume", &volume, 0.0f, 1.0f, 64.f, 16, 12.0f, 2.0f)) {
+            // value changed; use `volume`
+        }
 
         ImGui::EndDisabled();
         ImGui::EndDisabled();

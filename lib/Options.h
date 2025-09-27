@@ -15,8 +15,6 @@ using v = vectorutils;
 
 constexpr float tolerance = 1e-6f;
 
-#include "Camera.h"
-
 class Options {
 public:
     std::string stlpath = "";
@@ -49,8 +47,8 @@ public:
     float orthTuneLow = 0.6f;
     float orthTuneHi = 1.2f;
     float foreground_threshold = 0.90f;
-    float smoothThreshold = 0.75;
-    float smoothWeight = 6;
-    float rampWidth = 2.5;
-    float rampHeight = 100.0;
+    float smoothThreshold = 0.75f;
+    float smoothWeight = 6.0f; // larger -> milder smoothing
+    float rampWidth = 2.5f;
+    float rampHeight = 100.0f;
 };

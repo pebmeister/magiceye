@@ -1,4 +1,4 @@
-﻿// written by Paul Baxter
+﻿// // written by Paul Baxter
 #pragma once
 #include <stl.h>
 #include <iostream>
@@ -11,11 +11,7 @@
 #include "objtostl.h"
 #include "Stlsmoother.h"
 
-// stb_image libraries for loading/writing textures/images
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include "stb_image_impl.h"
 
 class StereogramGenerator {
 public:
@@ -170,7 +166,7 @@ private:
         }
 
         float aspect = static_cast<float>(options->width) / options->height;
-        // Compute default orthographic scale based on mesh span, screen aspect ratio, 
+        // Compute default orthographic scale based on mesh span, screen aspect ratio,
         // and empirical tuning factors (0.6f and 1.2f) to ensure object fits comfortably in view.
         auto scale = span * options->orthTuneLow * std::max(1.0f / aspect, 1.0f) * options->orthTuneHi;
         return scale;
@@ -198,7 +194,8 @@ private:
     {
         TextureData data;
 
-        if (options->texpath.empty() || options->texpath != "null") {
+        // FIX: only load if a valid path was provided and not "null"
+        if (!options->texpath.empty() && options->texpath != "null") {
             if (TextureSampler::loadRGB(options->texpath, data.texture,
                 data.tw, data.th, data.tchan)) {
                 data.hasTexture = true;
