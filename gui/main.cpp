@@ -463,10 +463,10 @@ static void DrawViewport(bool* open, bool has_result, GLuint tex_sirds, GLuint t
     ImGui::BeginChild("preview_area", ImVec2(0, 0), true, ImGuiWindowFlags_NoScrollWithMouse);
     if (has_result) {
         if (*tab_idx == 0) {
-            ImGui::Text(g_rendered_image_path.c_str());
+            ImGui::Text("%s", g_rendered_image_path.c_str());
         }
         else {
-            ImGui::Text(g_rendered_depth_path.c_str());
+            ImGui::Text("%s", g_rendered_depth_path.c_str());
         }
     }
     ImVec2 avail = ImGui::GetContentRegionAvail();
