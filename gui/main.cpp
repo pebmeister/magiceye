@@ -1,14 +1,5 @@
-// written by Paul Baxter
-
-// Dear ImGui: standalone example application for GLFW + OpenGL 3, using programmable pipeline
-// (GLFW is a cross-platform general purpose library for handling windows, inputs, OpenGL/Vulkan/Metal graphics context creation, etc.)
-
-// Learn about Dear ImGui:
-// - FAQ                  https://dearimgui.com/faq
-// - Getting Started      https://dearimgui.com/getting-started
-// - Documentation        https://dearimgui.com/docs (same as your local docs/ folder).
-// - Introduction, links and more at the top of imgui.cpp
-
+// written by Paul Baxter (refactored UI)
+// Dear ImGui + GLFW + OpenGL3
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
@@ -18,12 +9,19 @@
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <GLES2/gl2.h>
 #endif
-#include <GLFW/glfw3.h> // Will drag system OpenGL headers
+#include <GLFW/glfw3.h>
 #include <filesystem>
-
 #include <thread>
 #include <atomic>
 #include <future>
+#include <sstream>
+#include <iostream>
+#include <cmath>
+#include <cstring>
+
+// stb_image for texture loading
+// (only include header for prototypes; implementation should be compiled elsewhere in your project)
+#include "stb_image.h"
 
 #ifdef __linux__
 #include <unistd.h>
@@ -33,17 +31,13 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include <iostream>
 #include <shlobj.h>
 #endif
-// [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
-// To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
-// Your own project should not be affected, as you are likely to link with a newer binary of GLFW that is adequate for your version of Visual Studio.
+
 #if defined(_MSC_VER) && (_MSC_VER >= 1900) && !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
 #pragma comment(lib, "legacy_stdio_definitions")
 #endif
 
-// This example can also compile and run with Emscripten! See 'Makefile.emscripten' for details.
 #ifdef __EMSCRIPTEN__
 #include "../libs/emscripten/emscripten_mainloop_stub.h"
 #endif
@@ -52,54 +46,294 @@
 #include "Options.h"
 #include "openfile.h"
 #include "StereogramGenerator.h"
-int my_width, my_height;
-
-bool render_image = false;
-GLuint my_sirds_texture = 0;
-GLuint my_depth_texture = 0;
-
-std::future<bool> render_future;
-std::atomic<bool> is_rendering{ false };
-std::string rendered_image_path;
-std::string rendered_depth_path;
 
 namespace fs = std::filesystem;
 
-static std::string ToNarrow(const wchar_t s, char dfault = '?',
-    const std::locale& loc = std::locale())
-{
-    std::ostringstream stm;
+// Globals
+static int g_img_w = 0, g_img_h = 0;
+static bool g_has_result = false;
+static GLuint g_tex_sirds = 0;
+static GLuint g_tex_depth = 0;
 
-    stm << std::use_facet< std::ctype<wchar_t> >(loc).narrow(s, dfault);
-    return stm.str();
+static std::future<bool> g_render_future;
+static std::atomic<bool> g_is_rendering{ false };
+static std::string g_rendered_image_path;
+static std::string g_rendered_depth_path;
+
+// Forward declarations
+static void glfw_error_callback(int error, const char* description);
+static bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height);
+static fs::path resolve_path(const fs::path& input_path);
+
+// UI helpers
+static void SetupSexyStyle(float scale);
+static bool KnobID(const char* id, const char* visible_label, float* v, float v_min, float v_max, float size = 62.0f, int bar_segments = 64, float bar_height = 6.0f, float bar_gap = 2.0f);
+static bool KnobIntID(const char* id, const char* visible_label, int* v, int v_min, int v_max, float size = 62.0f);
+static bool Knob(const char* label, float* v, float v_min, float v_max, float size = 62.0f, int bar_segments = 64, float bar_height = 6.0f, float bar_gap = 2.0f);
+
+static bool KnobInt(const char* label, int* v, int v_min, int v_max, float size = 62.0f);
+static ImVec2 FitInto(const ImVec2& avail, int image_w, int image_h);
+static void DrawViewport(bool* open, bool has_result, GLuint tex_sirds, GLuint tex_depth, int img_w, int img_h, int* tab_idx);
+static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_openfile_dialog, bool& show_texture_openfile, openfile& texture_openfile_dialog);
+static void HandleRenderCompletion(Options* opt);
+
+// Small wrapper to use std::string with InputTextWithHint without imgui_stdlib
+static bool InputTextWithHintStr(const char* label, const char* hint, std::string& str, ImGuiInputTextFlags flags = 0)
+{
+    char buf[1024];
+    size_t len = str.size();
+    if (len >= sizeof(buf)) len = sizeof(buf) - 1;
+    std::memcpy(buf, str.c_str(), len);
+    buf[len] = '\0';
+
+    bool changed = ImGui::InputTextWithHint(label, hint, buf, sizeof(buf), flags);
+    if (changed)
+        str = buf;
+    return changed;
 }
 
-// Helper function to resolve paths with ".." components
+// Main
+int main(int, char**)
+{
+    glfwSetErrorCallback(glfw_error_callback);
+    if (!glfwInit())
+        return 1;
+
+#if defined(IMGUI_IMPL_OPENGL_ES2)
+    const char* glsl_version = "#version 100";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+#elif defined(IMGUI_IMPL_OPENGL_ES3)
+    const char* glsl_version = "#version 300 es";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+#elif defined(__APPLE__)
+    const char* glsl_version = "#version 150";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#else
+    const char* glsl_version = "#version 130";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif
+
+    float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor());
+    GLFWwindow* window = glfwCreateWindow((int)(1280 * main_scale), (int)(800 * main_scale), "Magic Eye", nullptr, nullptr);
+    if (window == nullptr)
+        return 1;
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
+
+    // ImGui
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    // No docking: your ImGui version doesn't have docking branch APIs.
+
+    SetupSexyStyle(main_scale);
+
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+#ifdef __EMSCRIPTEN__
+    ImGui_ImplGlfw_InstallEmscriptenCallbacks(window, "#canvas");
+#endif
+    ImGui_ImplOpenGL3_Init(glsl_version);
+
+    // App state
+    bool openMain = true;
+    bool show_stl_openfile = false;
+    bool show_texture_openfile = false;
+
+    // Root folder detection
+    std::string sep(1, std::filesystem::path::preferred_separator);
+    std::string root;
+#ifdef _WIN32
+#pragma comment(lib, "shell32.lib")
+    {
+        CHAR my_documents[MAX_PATH];
+        HRESULT result = SHGetFolderPathA(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, my_documents);
+        (void)result;
+        root = std::string(my_documents) + sep;
+    }
+#endif
+#ifdef __linux__
+    {
+        struct passwd* pw = getpwuid(getuid());
+        const char* homedir = pw ? pw->pw_dir : nullptr;
+        if (homedir && *homedir)
+            root = std::string(homedir) + sep + "Documents" + sep;
+        else
+            root = std::string("./");
+    }
+#endif
+#ifdef __APPLE__
+    {
+        const char* home = getenv("HOME");
+        if (home && *home)
+            root = std::string(home) + sep + "Documents" + sep;
+        else
+            root = std::string("./");
+    }
+#endif
+
+    auto stlpath = resolve_path(std::filesystem::absolute(root + "stl"));
+    auto texturepath = resolve_path(std::filesystem::absolute(root + "texture"));
+    openfile stl_openfile_dialog("Open STL/OBJ", stlpath.string(), { ".stl", ".obj" });
+    openfile texture_openfile_dialog("Open Texture", texturepath.string(), { ".png", ".jpg", ".jpeg", ".bmp" });
+
+    auto options = std::make_shared<Options>();
+    int viewport_tab = 0; // 0=SIRDS, 1=Depth
+    bool viewport_open = true;
+
+#ifndef __EMSCRIPTEN__
+    while (openMain && !glfwWindowShouldClose(window))
+#else
+    io.IniFilename = nullptr;
+    EMSCRIPTEN_MAINLOOP_BEGIN
+#endif
+    {
+        glfwPollEvents();
+        if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0) {
+            ImGui_ImplGlfw_Sleep(10);
+            continue;
+        }
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // Main menu bar at top
+        if (ImGui::BeginMainMenuBar()) {
+            if (ImGui::BeginMenu("File")) {
+                if (ImGui::MenuItem("Open Mesh...", "M")) show_stl_openfile = true;
+                if (ImGui::MenuItem("Open Texture...", "T")) show_texture_openfile = true;
+                if (ImGui::MenuItem("Quit", "Alt+F4")) openMain = false;
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("View")) {
+                ImGui::MenuItem("Viewport", nullptr, &viewport_open);
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+
+        // Inspector panel
+        ImGui::SetNextWindowPos(ImVec2(20, 60), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(420, 600), ImGuiCond_FirstUseEver);
+        ImGui::Begin("Inspector - Magic Eye");
+        DrawInspector(options.get(), show_stl_openfile, stl_openfile_dialog, show_texture_openfile, texture_openfile_dialog);
+        ImGui::End();
+
+        // Viewport panel
+        if (viewport_open) {
+            ImGui::SetNextWindowPos(ImVec2(460, 60), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(800, 800), ImGuiCond_FirstUseEver);
+            DrawViewport(&viewport_open, g_has_result, g_tex_sirds, g_tex_depth, g_img_w, g_img_h, &viewport_tab);
+        }
+
+        // Async render completion
+        HandleRenderCompletion(options.get());
+
+        // File dialogs (position near top-left)
+        if (show_stl_openfile) {
+            ImGui::SetNextWindowPos(ImVec2(40, 90), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(560, 700), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowFocus();
+            auto result = stl_openfile_dialog.show(show_stl_openfile);
+            if (result == openfile::FileSelected)
+                options->stlpath = stl_openfile_dialog.selecteditem.string();
+        }
+        if (show_texture_openfile) {
+            ImGui::SetNextWindowPos(ImVec2(40, 90), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(560, 700), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowFocus();
+            auto result = texture_openfile_dialog.show(show_texture_openfile);
+            if (result == openfile::FileSelected)
+                options->texpath = texture_openfile_dialog.selecteditem.string();
+        }
+
+        // Rendering
+        ImGui::Render();
+        int display_w, display_h;
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        ImVec4 clear_color = ImVec4(0.05f, 0.06f, 0.09f, 1.0f);
+        glClearColor(clear_color.x, clear_color.y, clear_color.z, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        glfwSwapBuffers(window);
+    }
+#ifdef __EMSCRIPTEN__
+    EMSCRIPTEN_MAINLOOP_END;
+#endif
+
+    // Cleanup
+    if (g_tex_sirds) { glDeleteTextures(1, &g_tex_sirds); g_tex_sirds = 0; }
+    if (g_tex_depth) { glDeleteTextures(1, &g_tex_depth); g_tex_depth = 0; }
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return 0;
+}
+
+// -------------- Helpers & UI --------------
+
+static void glfw_error_callback(int error, const char* description)
+{
+    fprintf(stderr, "GLFW Error %d: %s\n", error, description);
+}
+
+// Load image file to OpenGL texture
+static bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height)
+{
+    int w = 0, h = 0;
+    unsigned char* image_data = stbi_load(filename, &w, &h, NULL, 4);
+    if (!image_data) return false;
+
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+#ifdef GL_UNPACK_ROW_LENGTH
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+#endif
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
+    stbi_image_free(image_data);
+
+    *out_texture = tex;
+    *out_width = w;
+    *out_height = h;
+    return true;
+}
+
 static fs::path resolve_path(const fs::path& input_path)
 {
     try {
-        // First, convert to absolute path
         fs::path absolute_path = fs::absolute(input_path);
-
-        // Then, canonicalize it (which resolves symlinks and normalizes path)
-        // Note: canonical requires the path to exist
         if (fs::exists(absolute_path)) {
             return fs::canonical(absolute_path);
         }
-
-        // If the path doesn't exist, we need to manually resolve ".." components
         fs::path resolved_path;
         for (const auto& part : absolute_path) {
             if (part == "..") {
-                if (!resolved_path.empty() && resolved_path != resolved_path.root_path()) {
+                if (!resolved_path.empty() && resolved_path != resolved_path.root_path())
                     resolved_path = resolved_path.parent_path();
-                }
             }
             else if (part != "." && !part.empty()) {
                 resolved_path /= part;
             }
         }
-
         return resolved_path;
     }
     catch (const std::exception& e) {
@@ -108,524 +342,429 @@ static fs::path resolve_path(const fs::path& input_path)
     }
 }
 
-static void glfw_error_callback(int error, const char* description)
+// Theme setup
+static void SetupSexyStyle(float scale)
 {
-    fprintf(stderr, "GLFW Error %d: %s\n", error, description);
-}
-
-// Helper function to load an image into an OpenGL texture
-static bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height)
-{
-    // Load image data
-    int image_width = 0;
-    int image_height = 0;
-    unsigned char* image_data = stbi_load(filename, &image_width, &image_height, NULL, 4);
-    if (image_data == NULL)
-        return false;
-
-    // Create OpenGL texture
-    glGenTextures(1, out_texture);
-    glBindTexture(GL_TEXTURE_2D, *out_texture);
-
-    // Setup filtering parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-
-    // Upload pixels to GPU
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
-    stbi_image_free(image_data);
-
-    *out_width = image_width;
-    *out_height = image_height;
-
-    return true;
-}
-
-// Main code
-int main(int, char**)
-{
-    glfwSetErrorCallback(glfw_error_callback);
-    if (!glfwInit())
-        return 1;
-
-    // Decide GL+GLSL versions
-#if defined(IMGUI_IMPL_OPENGL_ES2)
-    // GL ES 2.0 + GLSL 100 (WebGL 1.0)
-    const char* glsl_version = "#version 100";
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
-#elif defined(IMGUI_IMPL_OPENGL_ES3)
-    // GL ES 3.0 + GLSL 300 es (WebGL 2.0)
-    const char* glsl_version = "#version 300 es";
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
-#elif defined(__APPLE__)
-    // GL 3.2 + GLSL 150
-    const char* glsl_version = "#version 150";
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // Required on Mac
-#else
-    // GL 3.0 + GLSL 130
-    const char* glsl_version = "#version 130";
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-    // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
-#endif
-    
-    // Create window with graphics context
-    float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor()); // Valid on GLFW 3.3+ only
-    GLFWwindow* window = glfwCreateWindow((int)(1280 * main_scale), (int)(800 * main_scale), "Magic Eye", nullptr, nullptr);
-    if (window == nullptr)
-        return 1;
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1); // Enable vsync
-
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-
-    // Setup Dear ImGui style
     ImGui::StyleColorsDark();
     // ImGui::StyleColorsLight();
-    // ImGui::StyleColorsClassic();
+    ImGuiStyle& s = ImGui::GetStyle();
+    s.ScaleAllSizes(scale);
 
-    // Setup scaling
+    s.WindowRounding = 10.0f;
+    s.ChildRounding = 8.0f;
+    s.FrameRounding = 8.0f;
+    s.GrabRounding = 8.0f;
+    s.PopupRounding = 8.0f;
+    s.ScrollbarRounding = 8.0f;
+    s.TabRounding = 8.0f;
+
+    ImVec4 accent(0.19f, 0.69f, 0.92f, 1.0f);
+    ImVec4 accent2(0.74f, 0.35f, 0.98f, 1.0f);
+    ImVec4 bg(0.10f, 0.11f, 0.14f, 1.0f);
+    ImVec4 bg2(0.13f, 0.14f, 0.18f, 1.0f);
+    ImVec4 text(0.95f, 0.96f, 0.98f, 1.0f);
+    ImVec4 muted(0.70f, 0.72f, 0.78f, 1.0f);
+
+    ImVec4* c = s.Colors;
+    c[ImGuiCol_WindowBg] = bg;
+    c[ImGuiCol_ChildBg] = bg2;
+    c[ImGuiCol_PopupBg] = ImVec4(0.09f, 0.10f, 0.13f, 1.0f);
+    c[ImGuiCol_FrameBg] = ImVec4(0.18f, 0.19f, 0.23f, 1.0f);
+    c[ImGuiCol_FrameBgHovered] = ImVec4(0.22f, 0.24f, 0.28f, 1.0f);
+    c[ImGuiCol_FrameBgActive] = accent;
+    c[ImGuiCol_TitleBg] = ImVec4(0.08f, 0.09f, 0.12f, 1.0f);
+    c[ImGuiCol_TitleBgActive] = ImVec4(0.12f, 0.14f, 0.18f, 1.0f);
+    c[ImGuiCol_TitleBgCollapsed] = ImVec4(0.08f, 0.09f, 0.12f, 1.0f);
+    c[ImGuiCol_Header] = ImVec4(0.18f, 0.20f, 0.25f, 1.0f);
+    c[ImGuiCol_HeaderHovered] = ImVec4(0.21f, 0.23f, 0.28f, 1.0f);
+    c[ImGuiCol_HeaderActive] = accent;
+    c[ImGuiCol_CheckMark] = accent;
+    c[ImGuiCol_SliderGrab] = accent;
+    c[ImGuiCol_SliderGrabActive] = accent2;
+    c[ImGuiCol_Button] = ImVec4(0.18f, 0.20f, 0.25f, 1.0f);
+    c[ImGuiCol_ButtonHovered] = ImVec4(0.21f, 0.23f, 0.28f, 1.0f);
+    c[ImGuiCol_ButtonActive] = accent;
+    c[ImGuiCol_Separator] = ImVec4(0.20f, 0.22f, 0.26f, 1.0f);
+    c[ImGuiCol_Tab] = ImVec4(0.16f, 0.18f, 0.22f, 1.0f);
+    c[ImGuiCol_TabHovered] = ImVec4(0.20f, 0.22f, 0.26f, 1.0f);
+    c[ImGuiCol_TabActive] = ImVec4(0.26f, 0.29f, 0.36f, 1.0f);
+    c[ImGuiCol_Text] = text;
+    c[ImGuiCol_TextDisabled] = ImVec4(muted.x, muted.y, muted.z, 1.0f);
+}
+
+// Knob wrappers
+static bool KnobID(const char* id, const char* visible_label, float* v, float v_min, float v_max, float size, int bar_segments, float bar_height, float bar_gap)
+{
+    ImGui::PushID(id);
+    bool changed = CustomWidgets::KnobWithIndicator(visible_label, v, v_min, v_max, size, bar_segments, bar_height, bar_gap);
+    ImGui::PopID();
+    return changed;
+}
+static bool KnobIntID(const char* id, const char* visible_label, int* v, int v_min, int v_max, float size)
+{
+    float tmp = (float)*v;
+    ImGui::PushID(id);
+    bool changed = CustomWidgets::KnobWithIndicator(visible_label, &tmp, (float)v_min, (float)v_max, size);
+    ImGui::PopID();
+    if (changed) {
+        int nv = (int)lroundf(tmp);
+        nv = (nv < v_min ? v_min : (nv > v_max ? v_max : nv));
+        if (nv != *v) { *v = nv; changed = true; }
+    }
+    return changed;
+}
+
+static bool Knob(const char* label, float* v, float v_min, float v_max, float size, int bar_segments, float bar_height, float bar_gap)
+{
+    return CustomWidgets::KnobWithIndicator(label, v, v_min, v_max, size, bar_segments, bar_height, bar_gap);
+}
+static bool KnobInt(const char* label, int* v, int v_min, int v_max, float size)
+{
+    float tmp = (float)*v;
+    bool changed = Knob(label, &tmp, (float)v_min, (float)v_max, size);
+    if (changed) {
+        int nv = (int)lroundf(tmp);
+        nv = (nv < v_min ? v_min : (nv > v_max ? v_max : nv));
+        if (nv != *v) { *v = nv; changed = true; }
+    }
+    return changed;
+}
+
+// Fit image into region
+static ImVec2 FitInto(const ImVec2& avail, int image_w, int image_h)
+{
+    if (image_w <= 0 || image_h <= 0) return ImVec2(0, 0);
+    float ar = (float)image_w / (float)image_h;
+    float target_w = avail.x;
+    float target_h = target_w / ar;
+    if (target_h > avail.y) {
+        target_h = avail.y;
+        target_w = target_h * ar;
+    }
+    return ImVec2(target_w, target_h);
+}
+
+// Viewport window
+static void DrawViewport(bool* open, bool has_result, GLuint tex_sirds, GLuint tex_depth, int img_w, int img_h, int* tab_idx)
+{
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse;
+    if (!ImGui::Begin("Viewport - Magic Eye", open, flags)) { ImGui::End(); return; }
+
+    ImGui::Text("Preview");
+    ImGui::Separator();
+    ImGui::Dummy(ImVec2(0, 2));
+
+    if (ImGui::BeginTabBar("preview_tabs", ImGuiTabBarFlags_NoCloseWithMiddleMouseButton)) {
+        if (ImGui::BeginTabItem("SIRDS")) { *tab_idx = 0; ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("Depth")) { *tab_idx = 1; ImGui::EndTabItem(); }
+        ImGui::EndTabBar();
+    }
+
+    ImGui::BeginChild("preview_area", ImVec2(0, 0), true, ImGuiWindowFlags_NoScrollWithMouse);
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+    if (!has_result) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 0.6f));
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8);
+        ImGui::TextWrapped("Load a mesh and texture, adjust settings in Inspector, then click Render.");
+        ImGui::PopStyleColor();
+    }
+    else {
+        ImVec2 sz = FitInto(avail, img_w, img_h);
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail.x - sz.x) * 0.5f);
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (avail.y - sz.y) * 0.5f);
+        GLuint t = (*tab_idx == 0 ? tex_sirds : tex_depth);
+        if (t)
+            ImGui::Image((void*)(intptr_t)t, sz);
+    }
+    ImGui::EndChild();
+
+    ImGui::End();
+}
+
+// Inspector window content
+static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_openfile_dialog, bool& show_texture_openfile, openfile& texture_openfile_dialog)
+{
     ImGuiStyle& style = ImGui::GetStyle();
-    style.ScaleAllSizes(main_scale);        // Bake a fixed style scale. (until we have a solution for dynamic style scaling, changing this requires resetting Style + calling this again)
-    style.FontScaleDpi = main_scale;        // Set initial font scale. (using io.ConfigDpiScaleFonts=true makes this unnecessary. We leave both here for documentation purpose)
+    const float line = ImGui::GetTextLineHeightWithSpacing();
 
-    // Setup Platform/Renderer backends
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-#ifdef __EMSCRIPTEN__
-    ImGui_ImplGlfw_InstallEmscriptenCallbacks(window, "#canvas");
-#endif
-    ImGui_ImplOpenGL3_Init(glsl_version);
-
-    // Load Fonts
-    // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple fonts and use ImGui::PushFont()/PopFont() to select them.
-    // - AddFontFromFileTTF() will return the ImFont* so you can store it if you need to select the font among multiple.
-    // - If the file cannot be loaded, the function will return a nullptr. Please handle those errors in your application (e.g. use an assertion, or display an error and quit).
-    // - Use '#define IMGUI_ENABLE_FREETYPE' in your imconfig file to use Freetype for higher quality font rendering.
-    // - Read 'docs/FONTS.md' for more instructions and details. If you like the default font but want it to scale better, consider using the 'ProggyVector' from the same author!
-    // - Remember that in C/C++ if you want to include a backslash \ in a string literal you need to write a double backslash \\ !
-    // - Our Emscripten build process allows embedding fonts to be accessible at runtime from the "fonts/" folder. See Makefile.emscripten for details.
-    //style.FontSizeBase = 20.0f;
-    //io.Fonts->AddFontDefault();
-    //io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf");
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf");
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf");
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf");
-    //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf");
-    //IM_ASSERT(font != nullptr);
-
-
-    // Our state
-    bool show_stl_openfile = false;
-    bool show_texture_openfile = false;
-    ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.80f, 1.00f);
-
-    std::string sep = ToNarrow(std::filesystem::path::preferred_separator);
-    std::string root;
-    
-    // Find the Documents folder on various platforms
-#ifdef _WIN32
-#pragma comment(lib, "shell32.lib")
+    // CARD: Sources (explicit height to avoid eating all remaining space)
+    ImGui::BeginChild("card_sources", ImVec2(0, line * 14.0f), true, ImGuiWindowFlags_None /* ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse*/);
     {
-        CHAR my_documents[MAX_PATH];
-        HRESULT result = SHGetFolderPath(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, my_documents);
-        root = std::string(my_documents) + sep;
-    }
-#endif
-#ifdef __linux__
-    {
-        struct passwd* pw = getpwuid(getuid());
-        const char* homedir = pw->pw_dir;
-        root = std::string(homedir) + sep + "Documents" + sep;
-    }
-#endif
-#ifdef __APPLE__
-    root = std::string("~") + sep + "Documents" + "sep";
-#endif
-
-
-    auto stlpath = resolve_path(std::filesystem::absolute(root + "stl"));
-    auto texturepath = resolve_path(std::filesystem::absolute(root + "texture"));
-    openfile stl_openfile_dialog("open STL/OBJ file", stlpath.string(), {".stl", ".obj"});
-    openfile texture_openfile_dialog("open Texture file", texturepath.string(), { ".png", ".jpg" });
-
-    auto image_rendured = false;
-    auto stereogram_options = std::make_shared<Options>();
-    
-    // Main loop
-#ifdef __EMSCRIPTEN__
-    // For an Emscripten build we are disabling file-system access, so let's not attempt to do a fopen() of the imgui.ini file.
-    // You may manually call LoadIniSettingsFromMemory() to load settings from your own storage.
-    io.IniFilename = nullptr;
-    EMSCRIPTEN_MAINLOOP_BEGIN
-#else
-    bool openMain = true;
-    while (openMain && !glfwWindowShouldClose(window))
-#endif
-    {
-        // Poll and handle events (inputs, window resize, etc.)
-        // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
-        // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
-        // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
-        // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
-        glfwPollEvents();
-        if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0) {
-            ImGui_ImplGlfw_Sleep(10);
-            continue;
-        }
-
-        // Start the Dear ImGui frame
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 50, main_viewport->WorkPos.y + 50), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(1000, 640), ImGuiCond_FirstUseEver);
-    
-        ImGui::Begin("Magic Eye", &openMain);
-
-        // STL/OBJ
-        ImGui::BeginDisabled(is_rendering);
-
-        if (ImGui::Button("Select STL/OBJ")) {
-            show_stl_openfile = true;
-        }
-        ImGui::SameLine();
-        auto stldisabled = stereogram_options->stlpath.empty();
-
-        ImGui::BeginDisabled(stldisabled);
-        ImGui::LabelText("", "%s", stereogram_options->stlpath.c_str());
-        ImGui::EndDisabled();
-
-        // TEXTURE
-        if (ImGui::Button("Select TEXTURE")) {
-            show_texture_openfile = true;
-        }
-        ImGui::SameLine();
-        auto texturedisabled = stereogram_options->stlpath.empty();
-        ImGui::BeginDisabled(texturedisabled);
-        ImGui::LabelText("", "%s", stereogram_options->texpath.c_str());
-        ImGui::EndDisabled();
-
-        auto paramsdiabled = stereogram_options->stlpath.empty() || stereogram_options->texpath.empty() || is_rendering;
-        ImGui::BeginDisabled(paramsdiabled);
-
-        // Check if rendering is complete (call this in your update loop)
-        if (is_rendering) {
-            // Check if the future is ready (non-blocking)
-            if (render_future.valid() &&
-                render_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-
-                bool success = render_future.get();
-                if (success) {
-                    // Load the texture on the main thread
-                    bool ret = LoadTextureFromFile(
-                        rendered_image_path.c_str(),
-                        &my_sirds_texture,
-                        &my_width,
-                        &my_height
-                    );
-                    if (ret) {
-                        bool ret2 = LoadTextureFromFile(
-                            rendered_depth_path.c_str(),
-                            &my_depth_texture,
-                            &my_width,
-                            &my_height
-                        );
-
-                        render_image = true;
-                    }
-                }
-                is_rendering = false;
-            }
-        }
-
-        // Display the image when ready
-        if (render_image) {
-            std::filesystem::path depth(stereogram_options->outprefix + "_depth.png");
-            auto path = std::filesystem::absolute(depth);
-            if (ImGui::Begin(path.string().c_str(), &render_image)) {
-                ImGui::Image((void*)(intptr_t)my_depth_texture, ImVec2(my_width, my_height));
-            }
-            ImGui::End();
-
-            std::filesystem::path sird(stereogram_options->outprefix + "_sirds.png");
-            path = std::filesystem::absolute(sird);
-            if (ImGui::Begin(path.string().c_str(), &render_image)) {
-                ImGui::Image((void*)(intptr_t)my_sirds_texture, ImVec2(my_width, my_height));
-            }
-            ImGui::End();
-        }
-
+        ImGui::Text("Sources");
         ImGui::Separator();
 
-        //////////////////////////////////////////////////
-        // Width - Height
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(264);
-        if (CustomWidgets::InputInt2("Dimentions", &stereogram_options->width)) {}
-
-        //////////////////////////////////////////////////
-        // Eye Seperation
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::SliderInt("Eye separation", &stereogram_options->eye_sep, 0, 250)) {}
-
-        //////////////////////////////////////////////////
-        // Camera Pos
-        //////////////////////////////////////////////////
-        ImGui::BeginDisabled(!stereogram_options->custom_cam_provided);
-        ImGui::SetNextItemWidth(400);
-        if (CustomWidgets::InputFloat3("Camera pos", &stereogram_options->custom_cam_pos[0])) {}
-        ImGui::EndDisabled();
+        // Mesh path
+        ImGui::PushID("mesh");
+        ImGui::TextUnformatted("Mesh");
         ImGui::SameLine();
-        if (ImGui::Checkbox("Use Custom camera pos", &stereogram_options->custom_cam_provided)) {}
-
-        //////////////////////////////////////////////////
-        // Look At
-        //////////////////////////////////////////////////
-        ImGui::BeginDisabled(!stereogram_options->custom_lookat_provided);
-        ImGui::SetNextItemWidth(400);
-        if (CustomWidgets::InputFloat3("Look at", &stereogram_options->custom_look_at[0])) {}
-        ImGui::EndDisabled();
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 90.0f);
+        InputTextWithHintStr("##path", "Select STL/OBJ...", opt->stlpath, ImGuiInputTextFlags_ReadOnly);
         ImGui::SameLine();
-        if (ImGui::Checkbox("Use Custom look at", &stereogram_options->custom_lookat_provided)) {}
+        if (ImGui::Button("Browse")) show_stl_openfile = true;
+        ImGui::PopID();
 
-        //////////////////////////////////////////////////
-        // Orthtagonal scale
-        //////////////////////////////////////////////////
-        ImGui::BeginDisabled(!stereogram_options->custom_orth_scale_provided);
-        ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("ortho scale", &stereogram_options->custom_orth_scale)) {}
-        ImGui::EndDisabled();
+        // Texture path
+        ImGui::PushID("texture");
+        ImGui::TextUnformatted("Texture");
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(261);
-        ImGui::LabelText("", "%s", "");
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 90.0f);
+        InputTextWithHintStr("##path", "Select texture...", opt->texpath, ImGuiInputTextFlags_ReadOnly);
         ImGui::SameLine();
-        if (ImGui::Checkbox("Use Custom orthogonal scale", &stereogram_options->custom_orth_scale_provided)) {}
-       
-        //////////////////////////////////////////////////
-        // Laplace smoothing
-        //////////////////////////////////////////////////
-        ImGui::BeginDisabled(!stereogram_options->laplace_smoothing);
-        ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputInt("Laplace layers", &stereogram_options->laplace_smooth_layers)) {}
-        ImGui::EndDisabled();
+        if (ImGui::Button("Browse")) show_texture_openfile = true;
+        ImGui::PopID();
+
+        ImGui::Dummy(ImVec2(0, 4));
+        ImGui::Separator();
+
+        // Resolution
+        ImGui::TextUnformatted("Resolution");
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(261);
-        ImGui::LabelText("", "%s", "");
+        ImGui::SetNextItemWidth(120);
+        CustomWidgets::InputInt2("##res", &opt->width);
         ImGui::SameLine();
-        if (ImGui::Checkbox("Use Laplace smoothing", &stereogram_options->laplace_smoothing)) {}
-
-        //////////////////////////////////////////////////
-        // Field of view
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Field of View", &stereogram_options->fov)) {}
-
-        //////////////////////////////////////////////////
-        // Rotation
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(400);
-        if (CustomWidgets::InputFloat3("Rotation", &stereogram_options->rot_deg[0])) {}
-
-        //////////////////////////////////////////////////
-        // Translation
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(400);
-        if (CustomWidgets::InputFloat3("Translation", &stereogram_options->trans[0])) {}
-
-        //////////////////////////////////////////////////
-        // Scale
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(400);
-        if (CustomWidgets::InputFloat3("Scale", &stereogram_options->sc[0])) {}
-
-        //////////////////////////////////////////////////
-        // Shear
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(400);
-        if (CustomWidgets::InputFloat3("Shear", &stereogram_options->shear[0])) {}
-
-        //////////////////////////////////////////////////
-        // Depth near far
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(263);
-        if (CustomWidgets::InputFloat2("Depth", &stereogram_options->depth_near)) {}
-
-        //////////////////////////////////////////////////
-        // Brightness
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Brightness", &stereogram_options->texture_brightness)) {}
-
-        //////////////////////////////////////////////////
-        // Contrast
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Contrast", &stereogram_options->texture_contrast)) {}
-
-        //////////////////////////////////////////////////
-        // Eye Seperation
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Separation", &stereogram_options->bg_separation)) {}
-
-        //////////////////////////////////////////////////
-        // Depth Gama
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Depth gama", &stereogram_options->depth_gamma)) {}
-
-        //////////////////////////////////////////////////
-        // Orthtagonal Tuning hi lo
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(263);
-        if (CustomWidgets::InputFloat2("Orth tune", &stereogram_options->orthTuneLow)) {}
-
-        //////////////////////////////////////////////////
-        // Foreground Threshhold
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Foreground", &stereogram_options->foreground_threshold)) {}
-
-        //////////////////////////////////////////////////
-        // Smooth Edges
-        //////////////////////////////////////////////////
-        if (ImGui::Checkbox("Smooth Edges", &stereogram_options->smoothEdges)) {}
-
-        ImGui::BeginDisabled(!stereogram_options->smoothEdges);
-
-        //////////////////////////////////////////////////
-        // Smooth Threshhold
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Smooth thresh", &stereogram_options->smoothThreshold)) {}
-
-        //////////////////////////////////////////////////
-        // Smooth Weight
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(130);
-        if (CustomWidgets::InputFloat("Smooth weight", &stereogram_options->smoothWeight)) {}
-
-        ImGui::EndDisabled();
-
-        //////////////////////////////////////////////////
-        // Ramp width height
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(263);
-        if (CustomWidgets::InputFloat2("Ramp", &stereogram_options->rampWidth)) {}
-
-        //////////////////////////////////////////////////
-        // Perspective
-        //////////////////////////////////////////////////
-        ImGui::SetNextItemWidth(130);
-        if (ImGui::Checkbox("Perspective", &stereogram_options->perspective)) {}
-
-        //////////////////////////////////////////////////
-        // Reset
-        //////////////////////////////////////////////////
-        if (ImGui::Button("Reset Options")) {
-            auto& stl = stereogram_options->stlpath;
-            auto& texture = stereogram_options->texpath;
-            auto options = std::make_shared<Options>();
-            options->stlpath = stl;
-            options->texpath = texture;
-            stereogram_options = options;
-        }
-        //////////////////////////////////////////////////
-        // Render
-        //////////////////////////////////////////////////
-        // 
-        if (ImGui::Button("Render")) {
-            is_rendering = true;
-            render_image = false;
-
-            auto path = std::filesystem::path(stereogram_options->stlpath);
-            auto outp = std::filesystem::absolute(path.replace_extension(""));
-
-            stereogram_options->outprefix =  outp.string();
-            // Launch the rendering in a separate thread
-            render_future = std::async(std::launch::async, [&]()
-                {
-                    StereogramGenerator st(stereogram_options);
-                    auto error = st.create();
-
-                    if (!error) {
-                        rendered_image_path = stereogram_options->outprefix + "_sirds.png";
-                        rendered_depth_path = stereogram_options->outprefix + "_depth.png";
-                        return true;
-                    }
-                    return false;
-                });
+        if (ImGui::BeginMenu("Preset")) {
+            if (ImGui::MenuItem("1280 x 800")) { opt->width = 1280; opt->height = 800; }
+            if (ImGui::MenuItem("1920 x 1080")) { opt->width = 1920; opt->height = 1080; }
+            if (ImGui::MenuItem("2560 x 1440")) { opt->width = 2560; opt->height = 1440; }
+            if (ImGui::MenuItem("3840 x 2160 (4K)")) { opt->width = 3840; opt->height = 2160; }
+            ImGui::EndMenu();
         }
 
+        ImGui::Dummy(ImVec2(0, 4));
+        // Eye separation knob (no raw ## label shown)
+        KnobIntID("eye_sep", "-- Eye separation", &opt->eye_sep, 0, 250, 62.0f);
+        //ImGui::SameLine();
+        //ImGui::Text(" %d", opt->eye_sep);
+    }
+    ImGui::EndChild();
+    ImGui::Dummy(ImVec2(0, 6));
+
+    // CARD: Camera (explicit height; removes big gap before camera)
+    ImGui::BeginChild("card_camera", ImVec2(0, line * 19.0f), true, ImGuiWindowFlags_None /* ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse */);
+    {
+        ImGui::Text("Camera");
+        ImGui::Separator();
+
+        // Perspective / Ortho
+        ImGui::Checkbox("Perspective", &opt->perspective);
+        ImGui::SameLine();
+        ImGui::TextDisabled("|");
+        ImGui::SameLine();
+        if (opt->perspective) {
+            ImGui::BeginDisabled(!opt->perspective);
+            KnobID("fov", "FOV", &opt->fov, 10.0f, 120.0f, 62.0f);
+            //ImGui::SameLine();
+            //ImGui::Text("%.0f deg", opt->fov);
+            ImGui::EndDisabled();
+        }
+        else {
+            ImGui::BeginDisabled(opt->perspective);
+            ImGui::Checkbox("Use Custom Ortho scale", &opt->custom_orth_scale_provided);
+            ImGui::BeginDisabled(!opt->custom_orth_scale_provided);
+            KnobID("orth", "Ortho scale", &opt->custom_orth_scale, 1.0f, 300.0f, 62.0f);
+            //ImGui::SameLine();
+            //ImGui::Text("%.1f", opt->custom_orth_scale);
+            ImGui::EndDisabled();
+            ImGui::EndDisabled();
+        }
+
+        ImGui::Dummy(ImVec2(0, 5));
+
+        // Custom camera pos (aligned like Rotation)
+        ImGui::Checkbox("Use custom camera pos", &opt->custom_cam_provided);
+        ImGui::BeginDisabled(!opt->custom_cam_provided);
+        CustomWidgets::InputFloat3("Camera pos", &opt->custom_cam_pos[0]);
         ImGui::EndDisabled();
+
+        // Custom look-at (aligned like Rotation)
+        ImGui::Checkbox("Use custom look-at", &opt->custom_lookat_provided);
+        ImGui::BeginDisabled(!opt->custom_lookat_provided);
+        CustomWidgets::InputFloat3("Look at", &opt->custom_look_at[0]);
         ImGui::EndDisabled();
-        if (is_rendering) {
-            ImGui::SameLine(); CustomWidgets::LoadingSpinner("##spinner", 12.0f, 4);
+
+        ImGui::Dummy(ImVec2(0, 4));
+        ImGui::TextUnformatted("Depth range (Near/Far)");
+        // ImGui::SetNextItemWidth(-1);
+        float minv = opt->depth_near;
+        float maxv = opt->depth_far;
+        if (ImGui::DragFloatRange2("##clip", &minv, &maxv, 0.01f, 0.0f, 1000.0f, "N: %.2f", "F: %.2f")) {
+            opt->depth_near = minv;
+            opt->depth_far = maxv;
         }
-        ImGui::End();
+    }
+    ImGui::EndChild();
+    ImGui::Dummy(ImVec2(0, 6));
 
-        if (show_stl_openfile) {
-            const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
-            ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 50, main_viewport->WorkPos.y + 20), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSize(ImVec2(550, 680), ImGuiCond_FirstUseEver);
+    // CARD: Transform (explicit height)
+    ImGui::BeginChild("card_transform", ImVec2(0, line * 8.0f), true, ImGuiWindowFlags_None);
+    {
+        ImGui::Text("Transform");
+        ImGui::Separator();
 
-            ImGui::SetNextWindowFocus();
-            auto result = stl_openfile_dialog.show(show_stl_openfile);
-            if (result == openfile::FileSelected) {
-                stereogram_options->stlpath = stl_openfile_dialog.selecteditem.string();
-            }
+        // ImGui::SetNextItemWidth(-1);
+        CustomWidgets::InputFloat3("Rotation", &opt->rot_deg[0]);
+
+        // ImGui::SetNextItemWidth(-1);
+        CustomWidgets::InputFloat3("Translation", &opt->trans[0]);
+
+        // ImGui::SetNextItemWidth(-1);
+        CustomWidgets::InputFloat3("Scale", &opt->sc[0]);
+
+        // ImGui::SetNextItemWidth(-1);
+        CustomWidgets::InputFloat3("Shear", &opt->shear[0]);
+    }
+    ImGui::EndChild();
+    ImGui::Dummy(ImVec2(0, 6));
+
+    // CARD: Stereo & Texture (explicit height)
+    ImGui::BeginChild("card_stereo_tex", ImVec2(0, line * 17.0f), true, ImGuiWindowFlags_None);
+    {
+        ImGui::Text("Stereo & Texture");
+        ImGui::Separator();
+
+        // Row 1: Brightness / Contrast / Separation
+        {
+            KnobID("bright", "Brightness", &opt->texture_brightness, 0.2f, 3.0f, 56.0f);
+            //ImGui::SameLine();
+            //ImGui::Text("%.2f", opt->texture_brightness);
+
+            ImGui::SameLine(0, 24);
+            KnobID("contrast", "Contrast", &opt->texture_contrast, 0.2f, 3.0f, 56.0f);
+
+            ImGui::SameLine(0, 24);
+            KnobID("sep", "Separation", &opt->bg_separation, 0.0f, 2.5f, 56.0f);
         }
 
-        if (show_texture_openfile) {
-            const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
-            ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 50, main_viewport->WorkPos.y + 20), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSize(ImVec2(550, 680), ImGuiCond_FirstUseEver);
+        ImGui::Dummy(ImVec2(0, 6));
+        // Row 2: Depth gamma / Foreground
+        {
+            KnobID("dg", "-  Depth gamma", &opt->depth_gamma, 0.1f, 5.0f, 56.0f);
 
-            ImGui::SetNextWindowFocus();
-            auto result = texture_openfile_dialog.show(show_texture_openfile);
-            if (result == openfile::FileSelected) {
-                stereogram_options->texpath = texture_openfile_dialog.selecteditem.string();
-            }
+            ImGui::SameLine(0, 24);
+            KnobID("fg", "Foreground", &opt->foreground_threshold, 0.1f, 1.0f, 56.0f);
         }
 
-        // Rendering
-        ImGui::Render();
-        int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
-        glViewport(0, 0, display_w, display_h);
-        glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
-        glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        ImGui::Dummy(ImVec2(0, 6));
+        ImGui::TextUnformatted("Ortho tune (Low/High)");
+        ImGui::SetNextItemWidth(-1);
+        float lo = opt->orthTuneLow;
+        float hi = opt->orthTuneHi;
+        if (ImGui::DragFloatRange2("##orth_tune", &lo, &hi, 0.01f, 0.1f, 5.0f, "L: %.2f", "H: %.2f")) {
+            opt->orthTuneLow = lo;
+            opt->orthTuneHi = hi;
+        }
+    }
+    ImGui::EndChild();
+    ImGui::Dummy(ImVec2(0, 6));
 
-        glfwSwapBuffers(window);
+    // CARD: Edges & Smoothing (fills remaining space)
+    ImGui::BeginChild("card_edges", ImVec2(0, 0), true);
+    {
+        ImGui::Text("Edges & Smoothing");
+        ImGui::Separator();
+
+        ImGui::Checkbox("Smooth edges", &opt->smoothEdges);
+        ImGui::BeginDisabled(!opt->smoothEdges);
+        {
+            KnobID("sth", "-  Smooth thresh", &opt->smoothThreshold, 0.0f, 1.0f, 56.0f);
+
+            ImGui::SameLine(0, 24);
+            KnobID("sw", "Smooth weight", &opt->smoothWeight, 1.0f, 20.0f, 56.0f);
+        }
+        ImGui::EndDisabled();
+
+        ImGui::Dummy(ImVec2(0, 4));
+        ImGui::Checkbox("Use Laplace smoothing", &opt->laplace_smoothing);
+        ImGui::BeginDisabled(!opt->laplace_smoothing);
+        ImGui::SetNextItemWidth(160);
+        CustomWidgets::InputInt("Laplace layers", &opt->laplace_smooth_layers);
+        ImGui::EndDisabled();
+
+        ImGui::Dummy(ImVec2(0, 4));
+        ImGui::TextUnformatted("Ramp (Width / Height)");
+        {
+            KnobID("rw", "Width", &opt->rampWidth, 0.0f, 20.0f, 56.0f);
+
+            ImGui::SameLine(0, 24);
+            KnobID("rh", "Height", &opt->rampHeight, 0.0f, 1000.0f, 56.0f);
+        }
+    }
+    ImGui::EndChild();
+    ImGui::Dummy(ImVec2(0, 10));
+
+    // Footer: Reset & Render
+    bool disabled_render = (opt->stlpath.empty() || opt->texpath.empty());
+    ImGui::BeginDisabled(disabled_render || g_is_rendering);
+    if (ImGui::Button("Render", ImVec2(ImGui::GetContentRegionAvail().x * 0.55f, 0))) {
+        g_is_rendering = true;
+        g_has_result = false;
+        if (g_tex_sirds) { glDeleteTextures(1, &g_tex_sirds); g_tex_sirds = 0; }
+        if (g_tex_depth) { glDeleteTextures(1, &g_tex_depth); g_tex_depth = 0; }
+
+        fs::path out = fs::absolute(fs::path(opt->stlpath).replace_extension(""));
+        opt->outprefix = out.string();
+
+        g_render_future = std::async(std::launch::async, [o = std::make_shared<Options>(*opt)]() mutable
+            {
+                StereogramGenerator st(o);
+                bool ok = !st.create();
+                if (ok) {
+                    g_rendered_image_path = o->outprefix + "_sirds.png";
+                    g_rendered_depth_path = o->outprefix + "_depth.png";
+                    return true;
+                }
+                return false;
+            });
+    }
+    ImGui::EndDisabled();
+
+    ImGui::SameLine();
+    if (ImGui::Button("Reset", ImVec2(ImGui::GetContentRegionAvail().x, 0))) {
+        std::string stl = opt->stlpath;
+        std::string tex = opt->texpath;
+        Options reset;
+        reset.stlpath = stl;
+        reset.texpath = tex;
+        *opt = reset;
     }
 
-#ifdef __EMSCRIPTEN__
-    EMSCRIPTEN_MAINLOOP_END;
-#endif
+    if (g_is_rendering) {
+        ImGui::SameLine();
+        CustomWidgets::LoadingSpinner("##spinner", 14.0f, 4);
+        ImGui::SameLine();
+        ImGui::TextUnformatted("Rendering...");
+    }
+}
 
-    // Cleanup
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
+// Render future handling
+static void HandleRenderCompletion(Options* opt)
+{
+    if (!g_is_rendering) return;
+    if (!g_render_future.valid()) return;
 
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    if (g_render_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        bool success = g_render_future.get();
+        if (success) {
+            GLuint tex1 = 0, tex2 = 0;
+            int w1 = 0, h1 = 0;
+            int w2 = 0, h2 = 0;
 
-    return 0;
+            bool ok1 = LoadTextureFromFile(g_rendered_image_path.c_str(), &tex1, &w1, &h1);
+            bool ok2 = LoadTextureFromFile(g_rendered_depth_path.c_str(), &tex2, &w2, &h2);
+
+            if (ok1 && ok2) {
+                g_tex_sirds = tex1;
+                g_tex_depth = tex2;
+                g_img_w = w1;
+                g_img_h = h1;
+                g_has_result = true;
+            }
+            else {
+                if (tex1) glDeleteTextures(1, &tex1);
+                if (tex2) glDeleteTextures(1, &tex2);
+                g_has_result = false;
+            }
+        }
+        g_is_rendering = false;
+    }
 }
