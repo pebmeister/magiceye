@@ -382,4 +382,95 @@ namespace CustomWidgets
 
         return value_changed;
     }
+
+    bool OrbitCamControl(const char* label, glm::vec3* cam_pos, glm::vec3* look_at)
+    {
+        ImGuiWindow* window = ImGui::GetCurrentWindow();
+        if (window->SkipItems) return false;
+
+        ImGuiStyle& style = ImGui::GetStyle();
+        ImVec2 size(ImGui::GetContentRegionAvail().x, 160.0f);
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        ImRect bb(pos, pos + size);
+        ImGui::ItemSize(size);
+        ImGui::ItemAdd(bb, window->GetID(label));
+
+        // Draw disc
+        ImDrawList* dl = window->DrawList;
+        ImVec2 center = ImVec2((bb.Min.x + bb.Max.x) * 0.5f, (bb.Min.y + bb.Max.y) * 0.5f);
+        float R = ImMin(size.x, size.y) * 0.45f;
+        dl->AddCircleFilled(center, R, ImGui::GetColorU32(ImGuiCol_FrameBg), 64);
+        dl->AddCircle(center, R, ImGui::GetColorU32(ImGuiCol_Border), 64, 2.0f);
+
+        // Camera vectors
+        glm::vec3 pos3 = *cam_pos;
+        glm::vec3 look3 = *look_at;
+        glm::vec3 dir = pos3 - look3;
+        float dist = glm::length(dir);
+        if (dist < 1e-6f) { dir = glm::vec3(0, 0, 1); dist = 1.0f; }
+        glm::vec3 ndir = dir / dist;
+
+        float yaw = std::atan2(ndir.x, ndir.z);                      // around Y
+        float pitch = std::atan2(ndir.y, std::sqrt(ndir.x * ndir.x + ndir.z * ndir.z)); // [-pi/2..pi/2]
+
+        // Interaction
+        bool hovered = false, held = false;
+        ImGui::ButtonBehavior(bb, window->GetID(label), &hovered, &held, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonMiddle);
+
+        bool changed = false;
+        ImGuiIO& io = ImGui::GetIO();
+        if (held && io.MouseDown[0]) {
+            // Left drag: orbit
+            ImVec2 d = io.MouseDelta;
+            float sens = 0.005f;
+            yaw += d.x * sens;
+            pitch += d.y * sens;
+            pitch = ImClamp(pitch, -IM_PI * 0.49f, IM_PI * 0.49f);
+            changed = true;
+        }
+        // Middle drag: pan
+        if (held && io.MouseDown[2]) {
+            ImVec2 d = io.MouseDelta;
+            float sens = dist * 0.0015f;
+            // Build camera basis from yaw/pitch
+            float cp = cosf(pitch), sp = sinf(pitch), cy = cosf(yaw), sy = sinf(yaw);
+            glm::vec3 fwd = glm::vec3(cp * sy, sp, cp * cy);   // forward towards look-at
+            glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(0, 1, 0)));
+            glm::vec3 up = glm::normalize(glm::cross(right, fwd));
+            glm::vec3 pan = (-d.x * sens) * right + (d.y * sens) * up;
+            look3 += pan;
+            pos3 += pan;
+            changed = true;
+        }
+        // Wheel: dolly
+        if (hovered && io.MouseWheel != 0.0f) {
+            float factor = 1.0f + io.MouseWheel * 0.1f;
+            dist = ImClamp(dist * factor, 0.05f, 1e6f);
+            changed = true;
+        }
+
+        // Recompute camera from yaw/pitch/dist
+        if (changed) {
+            float cp = cosf(pitch), sp = sinf(pitch), cy = cosf(yaw), sy = sinf(yaw);
+            glm::vec3 new_dir = glm::vec3(cp * sy, sp, cp * cy) * dist;
+            *look_at = look3;
+            *cam_pos = look3 + new_dir;
+        }
+
+        // Draw simple indicators
+        // forward tick
+        float a = yaw, r0 = R * 0.1f, r1 = R * 0.95f;
+        ImVec2 p0(center.x + r0 * cosf(a), center.y + r0 * sinf(a));
+        ImVec2 p1(center.x + r1 * cosf(a), center.y + r1 * sinf(a));
+        dl->AddLine(p0, p1, ImGui::GetColorU32(ImGuiCol_SliderGrabActive), 3.0f);
+        // horizon
+        dl->AddLine(ImVec2(center.x - R, center.y), ImVec2(center.x + R, center.y), ImGui::GetColorU32(ImGuiCol_Border), 1.0f);
+
+        // Distance readout
+        char buf[64];
+        snprintf(buf, sizeof(buf), "dist %.2f", dist);
+        dl->AddText(ImVec2(bb.Min.x + 6, bb.Min.y + 6), ImGui::GetColorU32(ImGuiCol_Text), buf);
+
+        return changed;
+    }
 }

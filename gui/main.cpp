@@ -461,6 +461,14 @@ static void DrawViewport(bool* open, bool has_result, GLuint tex_sirds, GLuint t
     }
 
     ImGui::BeginChild("preview_area", ImVec2(0, 0), true, ImGuiWindowFlags_NoScrollWithMouse);
+    if (has_result) {
+        if (*tab_idx == 0) {
+            ImGui::Text(g_rendered_image_path.c_str());
+        }
+        else {
+            ImGui::Text(g_rendered_depth_path.c_str());
+        }
+    }
     ImVec2 avail = ImGui::GetContentRegionAvail();
     if (!has_result) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 0.6f));
@@ -558,6 +566,7 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
             ImGui::EndDisabled();
         }
         else {
+
             ImGui::BeginDisabled(opt->perspective);
             ImGui::Checkbox("Use Custom Ortho scale", &opt->custom_orth_scale_provided);
             ImGui::BeginDisabled(!opt->custom_orth_scale_provided);
