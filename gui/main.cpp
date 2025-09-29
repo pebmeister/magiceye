@@ -184,7 +184,7 @@ int main(int, char**)
 
     auto stlpath = resolve_path(std::filesystem::absolute(root + "stl"));
     auto texturepath = resolve_path(std::filesystem::absolute(root + "texture"));
-    openfile stl_openfile_dialog("Open STL/OBJ", stlpath.string(), { ".stl", ".obj" });
+    openfile stl_openfile_dialog("Open Mesh", stlpath.string(), { ".stl", ".obj" });
     openfile texture_openfile_dialog("Open Texture", texturepath.string(), { ".png", ".jpg", ".jpeg", ".bmp" });
 
     auto options = std::make_shared<Options>();
@@ -506,7 +506,7 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
         ImGui::TextUnformatted("Mesh");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 90.0f);
-        InputTextWithHintStr("##path", "Select STL/OBJ...", opt->stlpath, ImGuiInputTextFlags_ReadOnly);
+        InputTextWithHintStr("##path", "Select mesh...", opt->stlpath, ImGuiInputTextFlags_ReadOnly);
         ImGui::SameLine();
         if (ImGui::Button("Browse")) show_stl_openfile = true;
         ImGui::PopID();
@@ -634,9 +634,6 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
         // Row 1: Brightness / Contrast / Separation
         {
             KnobID("bright", "Brightness", &opt->texture_brightness, 0.2f, 3.0f, 56.0f);
-            //ImGui::SameLine();
-            //ImGui::Text("%.2f", opt->texture_brightness);
-
             ImGui::SameLine(0, 24);
             KnobID("contrast", "Contrast", &opt->texture_contrast, 0.2f, 3.0f, 56.0f);
 
