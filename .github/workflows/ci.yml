@@ -1,0 +1,59 @@
+
+name: CMake CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        build_type: [Release]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Linux build deps for OpenGL + X11 (needed by GLFW)
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xorg-dev libgl1-mesa-dev
+
+      # Configure (single-config generators: Linux/macOS)
+      - name: Configure CMake (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DGLFW_BUILD_EXAMPLES=OFF \
+            -DGLFW_BUILD_TESTS=OFF \
+            -DGLFW_BUILD_DOCS=OFF \
+            -DGLFW_INSTALL=OFF
+
+      # Configure (multi-config generator: Windows/MSVC)
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -S . -B build -A x64 ^
+            -DGLFW_BUILD_EXAMPLES=OFF ^
+            -DGLFW_BUILD_TESTS=OFF ^
+            -DGLFW
+            _BUILD_DOCS=OFF ^
+            -DGLFW_INSTALL=OFF
+
+      # Build
+      - name: Build (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel
+
+            
