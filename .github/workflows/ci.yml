@@ -1,4 +1,4 @@
-
+=
 name: CMake CI
 
 on:
@@ -28,7 +28,6 @@ jobs:
       # Configure (single-config generators: Linux/macOS)
       - name: Configure CMake (Linux/macOS)
         if: runner.os != 'Windows'
-        shell: cmd
         run: |
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
@@ -37,17 +36,10 @@ jobs:
             -DGLFW_BUILD_DOCS=OFF \
             -DGLFW_INSTALL=OFF
 
-      # Configure (multi-config generator: Windows/MSVC)
+      # Configure (multi-config generator: Windows/MSVC, PowerShell default shell)
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
-        shell: cmd
-        run: |
-          cmake -S . -B build -A x64 ^
-            -DGLFW_BUILD_EXAMPLES=OFF ^
-            -DGLFW_BUILD_TESTS=OFF ^
-            -DGLFW
-            _BUILD_DOCS=OFF ^
-            -DGLFW_INSTALL=OFF
+        run: cmake -S . -B build -A x64 -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF -DGLFW_INSTALL=OFF
 
       # Build
       - name: Build (Linux/macOS)
@@ -57,5 +49,3 @@ jobs:
       - name: Build (Windows)
         if: runner.os == 'Windows'
         run: cmake --build build --config ${{ matrix.build_type }} --parallel
-
-            
