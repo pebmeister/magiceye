@@ -1,3 +1,5 @@
+cmake_minimum_required(VERSION 3.5)
+
 # --- Create the CLI executable ---
 add_executable(magic_eye_cli stl_to_sirds.cpp ParseArgs.h)
 
