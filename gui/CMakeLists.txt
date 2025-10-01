@@ -1,68 +1,46 @@
-if(APPLE)
-    cmake_minimum_required(VERSION 3.5)
-else()
-    cmake_minimum_required(VERSION 3.16)
-endif()
+cmake_minimum_required(VERSION 3.20)
+project(magic_eye_gui LANGUAGES CXX)
 
-# gui/CMakeLists.txt
+include(FetchContent)
 
-# Find OpenGL
+# OpenGL
 find_package(OpenGL REQUIRED)
 
-# Create the executable
-
-if (WIN32)
-add_executable(magic_eye_gui WIN32
-    main.cpp
-    openfile.cpp
-    openfile.h
-    customwidgets.cpp
-    customwidgets.h
-    # Any other files you have in the gui directory
-)
-
-else()
-
-add_executable(magic_eye_gui
-    main.cpp
-    openfile.cpp
-    openfile.h
-    customwidgets.cpp
-    customwidgets.h
-    # Any other files you have in the gui directory
-)
+# GLFW: use an existing target if present; otherwise fetch it
+if(NOT TARGET glfw)
+  FetchContent_Declare(
+    glfw
+    GIT_REPOSITORY https://github.com/glfw/glfw.git
+    GIT_TAG 3.4
+  )
+  set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+  set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(glfw)
 endif()
 
-
-# Add the backend source files from the ImGui backends
-target_sources(magic_eye_gui PRIVATE
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
-    
+# Sources (add .mm if you have any Objective‑C++ files for macOS)
+file(GLOB GUI_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cxx"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.mm"
 )
 
-# Include directories for ImGui and the backends
-target_include_directories(magic_eye_gui PRIVATE
-    ${imgui_SOURCE_DIR}
-    ${imgui_SOURCE_DIR}/backends
-    ${imgui_SOURCE_DIR}/examples
-)
+add_executable(magic_eye_gui ${GUI_SOURCES})
 
-# Link libraries: your magic eye library (from lib directory), stl_lib, imgui, glfw, OpenGL
-target_link_libraries(magic_eye_gui
-    magic_eye_lib   # This is the library from your lib/ directory, adjust if needed
-    stl_lib
-    imgui
+# Link against the interface library, GLFW, and OpenGL
+target_link_libraries(magic_eye_gui PRIVATE
+    magic_eye_lib
     glfw
     OpenGL::GL
 )
 
-# On Windows, link against opengl32
-if (WIN32)
-    if(MSVC)
-        set_target_properties(magic_eye_gui PROPERTIES
-            LINK_FLAGS "/ENTRY:mainCRTStartup"
-    )
-    endif()
-    target_link_libraries(magic_eye_gui opengl32 user32)
+# Be explicit with macOS frameworks if needed (GLFW usually adds them automatically)
+if(APPLE)
+  target_link_options(magic_eye_gui PRIVATE
+    "-framework Cocoa" "-framework IOKit" "-framework CoreVideo")
 endif()
+
+target_compile_features(magic_eye_gui PRIVATE cxx_std_17)
