@@ -1,3 +1,4 @@
+
 name: CMake CI
 
 on:
@@ -26,8 +27,6 @@ jobs:
         run: |
           cmake --version
           python --version || true
-          clang --version || true
-          gcc --version || true
 
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
@@ -41,33 +40,20 @@ jobs:
         with:
           arch: x64
 
-      - name: Setup Apple Clang + Ninja (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          # Ensure we use Apple's clang toolchain and SDK
-          echo "CC=$(xcrun -f clang)" >> $GITHUB_ENV
-          echo "CXX=$(xcrun -f clang++)" >> $GITHUB_ENV
-          echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
-          # Set a reasonable deployment target; adjust if you need older support
-          echo "MACOSX_DEPLOYMENT_TARGET=12.0" >> $GITHUB_ENV
-          brew install ninja || true
-
-      # Configure (macOS uses Ninja + Apple clang)
+      # Configure (macOS uses Unix Makefiles to avoid Ninja -framework arg issue)
       - name: Configure (macOS)
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          cmake -S . -B build -G Ninja \
+          cmake -S . -B build \
+            -G "Unix Makefiles" \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_OSX_SYSROOT="$SDKROOT" \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
             -DGLFW_BUILD_EXAMPLES=OFF \
             -DGLFW_BUILD_TESTS=OFF \
             -DGLFW_BUILD_DOCS=OFF \
             -DGLFW_INSTALL=OFF
 
-      # Configure (Linux/Windows keep existing defaults)
+      # Configure (Linux/Windows - keep as before)
       - name: Configure (Linux/Windows)
         if: runner.os != 'macOS'
         shell: bash
