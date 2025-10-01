@@ -79,7 +79,31 @@ target_include_directories(stl_lib PUBLIC
     ${obj_SOURCE_DIR}/include
 )
 
-# --- Create imgui library with GLFW + OpenGL3 backends and bundled GLAD ---
+# --- Detect ImGui OpenGL loader from examples (GLAD2, GLAD1, or GL3W) ---
+set(IMGUI_GL_LOADER_SRC "")
+set(IMGUI_GL_LOADER_INCLUDE_DIR "")
+set(IMGUI_GL_LOADER_DEFINE "")
+
+if(EXISTS "${imgui_SOURCE_DIR}/examples/libs/glad/src/gl.c")
+    # GLAD2 layout
+    set(IMGUI_GL_LOADER_SRC "${imgui_SOURCE_DIR}/examples/libs/glad/src/gl.c")
+    set(IMGUI_GL_LOADER_INCLUDE_DIR "${imgui_SOURCE_DIR}/examples/libs/glad/include")
+    set(IMGUI_GL_LOADER_DEFINE "IMGUI_IMPL_OPENGL_LOADER_GLAD2")
+elseif(EXISTS "${imgui_SOURCE_DIR}/examples/libs/glad/src/glad.c")
+    # GLAD1 layout
+    set(IMGUI_GL_LOADER_SRC "${imgui_SOURCE_DIR}/examples/libs/glad/src/glad.c")
+    set(IMGUI_GL_LOADER_INCLUDE_DIR "${imgui_SOURCE_DIR}/examples/libs/glad/include")
+    set(IMGUI_GL_LOADER_DEFINE "IMGUI_IMPL_OPENGL_LOADER_GLAD")
+elseif(EXISTS "${imgui_SOURCE_DIR}/examples/libs/gl3w/GL/gl3w.c")
+    # GL3W fallback
+    set(IMGUI_GL_LOADER_SRC "${imgui_SOURCE_DIR}/examples/libs/gl3w/GL/gl3w.c")
+    set(IMGUI_GL_LOADER_INCLUDE_DIR "${imgui_SOURCE_DIR}/examples/libs/gl3w")
+    set(IMGUI_GL_LOADER_DEFINE "IMGUI_IMPL_OPENGL_LOADER_GL3W")
+else()
+    message(FATAL_ERROR "Could not find an OpenGL loader in ImGui examples (tried GLAD2, GLAD1, GL3W).")
+endif()
+
+# --- Create imgui library with GLFW + OpenGL3 backends and detected loader ---
 add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
@@ -91,18 +115,18 @@ add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 
-    # Bundled GLAD from ImGui examples (avoids extra dependency)
-    ${imgui_SOURCE_DIR}/examples/libs/glad/src/glad.c
+    # Detected OpenGL loader (GLAD2/GLAD1/GL3W)
+    ${IMGUI_GL_LOADER_SRC}
 )
 
 target_include_directories(imgui PUBLIC
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
-    ${imgui_SOURCE_DIR}/examples/libs/glad/include
+    ${IMGUI_GL_LOADER_INCLUDE_DIR}
 )
 
-# Tell the OpenGL3 backend to use GLAD
-target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
+# Tell the OpenGL3 backend which loader we use
+target_compile_definitions(imgui PUBLIC ${IMGUI_GL_LOADER_DEFINE})
 
 # Backends need GLFW and OpenGL; link them so consumers don’t have to
 target_link_libraries(imgui PUBLIC
