@@ -1,95 +1,59 @@
-if(APPLE)
-    cmake_minimum_required(VERSION 3.5)
-else()
-    cmake_minimum_required(VERSION 3.16)
-endif()
+name: CMake CI
 
-project(magic_eye)
+on:
+  push:
+  pull_request:
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        build_type: [Release]
 
-include(FetchContent)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-# --- Fetch stb libraries ---
-FetchContent_Declare(
-    stb
-    GIT_REPOSITORY https://github.com/nothings/stb.git
-    GIT_TAG master
-)
-FetchContent_MakeAvailable(stb)
+      - name: Setup CMake (all OS)
+        uses: jwlawson/actions-setup-cmake@v1
+        with:
+          cmake-version: '3.25.x'
 
-# --- Fetch obj libraries --- 
-FetchContent_Declare( 
-    obj 
-    GIT_REPOSITORY https://github.com/guybrush77/rapidobj.git 
-    GIT_TAG master 
-) 
-FetchContent_MakeAvailable(obj)
+      - name: Show tool versions
+        run: |
+          cmake --version
+          python --version || true
 
-# --- Fetch the pebmeister STL project ---
-FetchContent_Declare(
-    pebmeister_stl
-    GIT_REPOSITORY https://github.com/pebmeister/stl.git
-    GIT_TAG master
-)
-FetchContent_MakeAvailable(pebmeister_stl)
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xorg-dev libgl1-mesa-dev ninja-build
 
-# --- Fetch GLM (header-only) ---
-# Top-level CMakeLists.txt
+      - name: MSVC dev env (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
-# Force static runtime for all MSVC targets (including dependencies)
-if(MSVC)
-    set(USE_MSVC_RUNTIME_LIBRARY_DLL OFF CACHE BOOL "Use MSVC runtime DLL")
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "MSVC runtime")
-endif()
+      - name: Ensure Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja || true
 
-FetchContent_Declare(
-    glm
-    GIT_REPOSITORY https://github.com/g-truc/glm.git
-    GIT_TAG 0.9.9.8
-)
-FetchContent_MakeAvailable(glm)
+      # Configure
+      - name: Configure
+        shell: bash
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DGLFW_BUILD_EXAMPLES=OFF \
+            -DGLFW_BUILD_TESTS=OFF \
+            -DGLFW_BUILD_DOCS=OFF \
+            -DGLFW_INSTALL=OFF
 
-# --- Fetch imgui libraries ---
-FetchContent_Declare(
-    imgui
-    GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG master
-)
-FetchContent_MakeAvailable(imgui)
-
-# --- Fetch GLFW ---
-FetchContent_Declare(
-    glfw
-    GIT_REPOSITORY https://github.com/glfw/glfw.git
-    GIT_TAG 3.3.8
-)
-FetchContent_MakeAvailable(glfw)
-
-# --- Create STL library here in root since it depends on FetchContent ---
-add_library(stl_lib
-    ${pebmeister_stl_SOURCE_DIR}/stl.cpp
-    ${pebmeister_stl_SOURCE_DIR}/stl.h
-)
-
-target_include_directories(stl_lib PUBLIC
-    ${pebmeister_stl_SOURCE_DIR}
-    ${obj_SOURCE_DIR}/include
-)
-
-# --- Create imgui library ---
-add_library(imgui STATIC
-    ${imgui_SOURCE_DIR}/imgui.cpp
-    ${imgui_SOURCE_DIR}/imgui_demo.cpp
-    ${imgui_SOURCE_DIR}/imgui_draw.cpp
-    ${imgui_SOURCE_DIR}/imgui_tables.cpp
-    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-)
-
-target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
-
-# --- Add subdirectories ---
-add_subdirectory(lib)
-add_subdirectory(cli)
-add_subdirectory(gui)   # We are adding a new gui subdirectory
+      # Build
+      - name: Build
+        run: cmake --build build --parallel

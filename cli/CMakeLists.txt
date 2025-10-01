@@ -4,11 +4,19 @@ else()
     cmake_minimum_required(VERSION 3.16)
 endif()
 
-# --- Create the CLI executable ---
-add_executable(magic_eye_cli stl_to_sirds.cpp ParseArgs.h)
+project(magic_eye_cli LANGUAGES CXX)
 
-# --- Add include directory for cleaner includes ---
-target_include_directories(magic_eye_cli PRIVATE ${CMAKE_SOURCE_DIR}/lib)
+# Collect sources
+file(GLOB CLI_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cxx"
+)
 
-# --- Link the headers-only library to the CLI executable ---
+add_executable(magic_eye_cli ${CLI_SOURCES})
+
+# Link to the header-only interface library; it propagates includes and deps
 target_link_libraries(magic_eye_cli PRIVATE magic_eye_lib)
+
+# Match the top-level standard
+target_compile_features(magic_eye_cli PRIVATE cxx_std_20)
