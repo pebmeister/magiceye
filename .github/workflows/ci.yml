@@ -57,5 +57,3 @@ jobs:
       # Build
       - name: Build
         run: cmake --build build --parallel
-
-

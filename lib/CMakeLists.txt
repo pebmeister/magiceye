@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.20)
 
 # Adopt modern behavior for target_sources relative paths
 cmake_policy(SET CMP0076 NEW)
-
 # Header-only interface library for core functionality
 add_library(magic_eye_lib INTERFACE)
 
