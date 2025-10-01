@@ -1,4 +1,3 @@
-
 name: CMake CI
 
 on:
@@ -18,6 +17,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Install specific CMake versions:
+      # - Linux/Windows: 3.16.x (to ensure we test against your lowest supported)
+      # - macOS: latest (>=3.5, and compatible with AppleClang 17)
+      - name: Setup CMake 3.16 (Linux/Windows)
+        if: runner.os != 'macOS'
+        uses: jwlawson/actions-setup-cmake@v1
+        with:
+          cmake-version: '3.16.x'
+
+      - name: Setup CMake (macOS latest)
+        if: runner.os == 'macOS'
+        uses: jwlawson/actions-setup-cmake@v1
+        with:
+          cmake-version: 'latest'
+
+      - name: Show CMake version
+        run: cmake --version
+
       # Linux build deps for OpenGL + X11 (needed by GLFW)
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
@@ -26,20 +43,29 @@ jobs:
           sudo apt-get install -y xorg-dev libgl1-mesa-dev
 
       # Configure (single-config generators: Linux/macOS)
+      # Pass -DCMAKE_POLICY_VERSION_MINIMUM=3.5 to allow dependencies that call
+      # cmake_minimum_required(< 3.5) to configure under new CMake.
       - name: Configure CMake (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DGLFW_BUILD_EXAMPLES=OFF \
             -DGLFW_BUILD_TESTS=OFF \
             -DGLFW_BUILD_DOCS=OFF \
             -DGLFW_INSTALL=OFF
 
-      # Configure (multi-config generator: Windows/MSVC, PowerShell default shell)
+      # Configure (multi-config generator: Windows/MSVC)
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
-        run: cmake -S . -B build -A x64 -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF -DGLFW_INSTALL=OFF
+        run: |
+          cmake -S . -B build -A x64 \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DGLFW_BUILD_EXAMPLES=OFF \
+            -DGLFW_BUILD_TESTS=OFF \
+            -DGLFW_BUILD_DOCS=OFF \
+            -DGLFW_INSTALL=OFF
 
       # Build
       - name: Build (Linux/macOS)
