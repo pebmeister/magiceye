@@ -52,4 +52,3 @@ endif()
 
 # Match the top-level standard
 target_compile_features(magic_eye_gui PRIVATE cxx_std_20)
-
