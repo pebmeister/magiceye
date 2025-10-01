@@ -84,6 +84,7 @@ target_include_directories(stl_lib PUBLIC
 set(IMGUI_GL_LOADER_SRC "")
 set(IMGUI_GL_LOADER_INCLUDE_DIR "")
 set(IMGUI_GL_LOADER_DEFINE "")
+set(IMGUI_GLEW_TARGET "")  # actual GLEW target to link if we fall back
 
 if(EXISTS "${imgui_SOURCE_DIR}/examples/libs/glad/src/gl.c")
     # GLAD2 layout
@@ -111,6 +112,15 @@ else()
     FetchContent_MakeAvailable(glew)
     set(IMGUI_GL_LOADER_INCLUDE_DIR "${glew_SOURCE_DIR}/include")
     set(IMGUI_GL_LOADER_DEFINE "IMGUI_IMPL_OPENGL_LOADER_GLEW")
+
+    # Determine the actual GLEW target name provided by glew-cmake
+    if(TARGET glew_s)
+        set(IMGUI_GLEW_TARGET glew_s)
+    elseif(TARGET libglew_static)
+        set(IMGUI_GLEW_TARGET libglew_static)
+    elseif(TARGET glew)
+        set(IMGUI_GLEW_TARGET glew) # shared
+    endif()
 endif()
 
 # --- Create imgui library with GLFW + OpenGL3 backends and detected/fallback loader ---
@@ -140,9 +150,12 @@ if(IMGUI_GL_LOADER_DEFINE)
     target_compile_definitions(imgui PUBLIC ${IMGUI_GL_LOADER_DEFINE})
 endif()
 
-# If using GLEW fallback, link and define GLEW_STATIC
+# If using GLEW fallback, link to the correct target and define GLEW_STATIC
 if(IMGUI_GL_LOADER_DEFINE STREQUAL "IMGUI_IMPL_OPENGL_LOADER_GLEW")
-    target_link_libraries(imgui PUBLIC glew_s)
+    if(IMGUI_GLEW_TARGET STREQUAL "")
+        message(FATAL_ERROR "GLEW fallback selected but no known GLEW CMake target was found (expected glew_s, libglew_static, or glew).")
+    endif()
+    target_link_libraries(imgui PUBLIC ${IMGUI_GLEW_TARGET})
     target_compile_definitions(imgui PUBLIC GLEW_STATIC)
 endif()
 
