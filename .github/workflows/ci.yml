@@ -17,9 +17,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Install specific CMake versions:
-      # - Linux/Windows: 3.16.x (to ensure we test against your lowest supported)
-      # - macOS: latest (>=3.5, and compatible with AppleClang 17)
+      # CMake: Linux/Windows -> 3.16.x, macOS -> latest (>=3.5)
       - name: Setup CMake 3.16 (Linux/Windows)
         if: runner.os != 'macOS'
         uses: jwlawson/actions-setup-cmake@v1
@@ -35,43 +33,37 @@ jobs:
       - name: Show CMake version
         run: cmake --version
 
-      # Linux build deps for OpenGL + X11 (needed by GLFW)
+      # Linux deps (GLFW/OpenGL/X11, adjust as needed)
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y xorg-dev libgl1-mesa-dev
 
-      # Configure (single-config generators: Linux/macOS)
-      # Pass -DCMAKE_POLICY_VERSION_MINIMUM=3.5 to allow dependencies that call
-      # cmake_minimum_required(< 3.5) to configure under new CMake.
+      # Windows: set MSVC environment and use Ninja to avoid VS 2022 generator issues with CMake 3.16
+      - name: MSVC dev env (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Ensure Ninja (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ninja --no-progress
+
+      # Configure
       - name: Configure CMake (Linux/macOS)
         if: runner.os != 'Windows'
-        run: |
-          cmake -S . -B build \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-            -DGLFW_BUILD_EXAMPLES=OFF \
-            -DGLFW_BUILD_TESTS=OFF \
-            -DGLFW_BUILD_DOCS=OFF \
-            -DGLFW_INSTALL=OFF
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF -DGLFW_INSTALL=OFF
 
-      # Configure (multi-config generator: Windows/MSVC)
-      - name: Configure CMake (Windows)
+      - name: Configure CMake (Windows, Ninja + MSVC)
         if: runner.os == 'Windows'
-        run: |
-          cmake -S . -B build -A x64 \
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-            -DGLFW_BUILD_EXAMPLES=OFF \
-            -DGLFW_BUILD_TESTS=OFF \
-            -DGLFW_BUILD_DOCS=OFF \
-            -DGLFW_INSTALL=OFF
+        run: cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF -DGLFW_INSTALL=OFF
 
       # Build
-      - name: Build (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: cmake --build build --config ${{ matrix.build_type }} --parallel
+      - name: Build
+        run: cmake --build build --parallel
 
-      - name: Build (Windows)
-        if: runner.os == 'Windows'
-        run: cmake --build build --config ${{ matrix.build_type }} --parallel
+      # Optional: run tests if you have them
+      # - name: Test
+      #   run: ctest --test-dir build --output-on-failure
