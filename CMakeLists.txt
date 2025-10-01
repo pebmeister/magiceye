@@ -1,4 +1,12 @@
-cmake_minimum_required(VERSION 3.5)
+if(WIN32)
+    cmake_minimum_required(VERSION 3.16)
+elseif(UNIX)
+    cmake_minimum_required(VERSION 3.16)
+elseif(APPLE)
+    cmake_minimum_required(VERSION 3.5)
+endif()
+
+
 project(magic_eye)
 
 set(CMAKE_CXX_STANDARD 20)
