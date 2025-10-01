@@ -17,30 +17,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # CMake: Linux/Windows -> 3.16.x, macOS -> latest (>=3.5)
-      - name: Setup CMake 3.16 (Linux/Windows)
+      # Linux/Windows: need >= 3.20 because RapidObj requires it.
+      # Choose 3.25.x to also play nice with newer toolchains.
+      - name: Setup CMake (Linux/Windows >=3.20)
         if: runner.os != 'macOS'
         uses: jwlawson/actions-setup-cmake@v1
         with:
-          cmake-version: '3.16.x'
+          cmake-version: '3.25.x'
 
+      # macOS: use modern CMake but clamp policies so GLM(3.2) doesn't fail.
       - name: Setup CMake (macOS latest)
         if: runner.os == 'macOS'
         uses: jwlawson/actions-setup-cmake@v1
         with:
           cmake-version: 'latest'
 
-      - name: Show CMake version
-        run: cmake --version
+      - name: Show tool versions
+        run: |
+          cmake --version
+          python --version || true
 
-      # Linux deps (GLFW/OpenGL/X11, adjust as needed)
+      # Ubuntu deps for GLFW/OpenGL/X11
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y xorg-dev libgl1-mesa-dev
+          sudo apt-get install -y xorg-dev libgl1-mesa-dev ninja-build
 
-      # Windows: set MSVC environment and use Ninja to avoid VS 2022 generator issues with CMake 3.16
+      # Windows: MSVC environment + Ninja; force MSVC compilers (avoid MinGW).
       - name: MSVC dev env (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
@@ -49,21 +53,53 @@ jobs:
 
       - name: Ensure Ninja (Windows)
         if: runner.os == 'Windows'
-        run: choco install ninja --no-progress
+        run: choco install ninja --no-progress --yes
+
+      # macOS: ensure Ninja in case you want to switch generators later
+      - name: Ensure Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja || true
 
       # Configure
-      - name: Configure CMake (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF -DGLFW_INSTALL=OFF
+      - name: Configure (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DGLFW_BUILD_EXAMPLES=OFF \
+            -DGLFW_BUILD_TESTS=OFF \
+            -DGLFW_BUILD_DOCS=OFF \
+            -DGLFW_INSTALL=OFF
 
-      - name: Configure CMake (Windows, Ninja + MSVC)
+      - name: Configure (macOS; clamp policy for GLM 3.2)
+        if: runner.os == 'macOS'
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DGLFW_BUILD_EXAMPLES=OFF \
+            -DGLFW_BUILD_TESTS=OFF \
+            -DGLFW_BUILD_DOCS=OFF \
+            -DGLFW_INSTALL=OFF
+
+      - name: Configure (Windows; Ninja + force MSVC compilers)
         if: runner.os == 'Windows'
-        run: cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF -DGLFW_INSTALL=OFF
+        shell: pwsh
+        run: |
+          # Force MSVC so CMake doesn't pick Git's MinGW toolchain
+          cmake -S . -B build -G "Ninja" `
+            -DCMAKE_C_COMPILER=cl `
+            -DCMAKE_CXX_COMPILER=cl `
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+            -DGLFW_BUILD_EXAMPLES=OFF `
+            -DGLFW_BUILD_TESTS=OFF `
+            -DGLFW_BUILD_DOCS=OFF `
+            -DGLFW_INSTALL=OFF
 
       # Build
       - name: Build
         run: cmake --build build --parallel
 
-      # Optional: run tests if you have them
+      # Optional: tests
       # - name: Test
       #   run: ctest --test-dir build --output-on-failure
