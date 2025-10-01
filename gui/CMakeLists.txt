@@ -19,7 +19,7 @@ if(NOT TARGET glfw)
   FetchContent_MakeAvailable(glfw)
 endif()
 
-# Sources (add .mm if you have Objective‑C++ files for macOS)
+# Sources (add .mm if you have ObjectiveC++ files for macOS)
 file(GLOB GUI_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
@@ -30,7 +30,6 @@ file(GLOB GUI_SOURCES CONFIGURE_DEPENDS
 add_executable(magic_eye_gui ${GUI_SOURCES})
 
 # Ensure ImGui headers are visible to this target and link the ImGui library
-# This fixes the "cannot find imgui.h" error across all platforms.
 target_include_directories(magic_eye_gui PRIVATE
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
