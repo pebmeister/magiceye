@@ -79,7 +79,8 @@ target_include_directories(stl_lib PUBLIC
     ${obj_SOURCE_DIR}/include
 )
 
-# --- Detect ImGui OpenGL loader from examples (GLAD2, GLAD1, or GL3W) ---
+# --- Detect ImGui OpenGL loader from examples (GLAD2, GLAD1, or GL3W).
+# If not found (current imgui master removed them), fall back to GLEW. ---
 set(IMGUI_GL_LOADER_SRC "")
 set(IMGUI_GL_LOADER_INCLUDE_DIR "")
 set(IMGUI_GL_LOADER_DEFINE "")
@@ -100,10 +101,19 @@ elseif(EXISTS "${imgui_SOURCE_DIR}/examples/libs/gl3w/GL/gl3w.c")
     set(IMGUI_GL_LOADER_INCLUDE_DIR "${imgui_SOURCE_DIR}/examples/libs/gl3w")
     set(IMGUI_GL_LOADER_DEFINE "IMGUI_IMPL_OPENGL_LOADER_GL3W")
 else()
-    message(FATAL_ERROR "Could not find an OpenGL loader in ImGui examples (tried GLAD2, GLAD1, GL3W).")
+    message(STATUS "ImGui example OpenGL loaders not found. Falling back to GLEW.")
+    # Fetch and build GLEW from source
+    FetchContent_Declare(
+        glew
+        GIT_REPOSITORY https://github.com/Perlmint/glew-cmake.git
+        GIT_TAG glew-cmake-2.2.0
+    )
+    FetchContent_MakeAvailable(glew)
+    set(IMGUI_GL_LOADER_INCLUDE_DIR "${glew_SOURCE_DIR}/include")
+    set(IMGUI_GL_LOADER_DEFINE "IMGUI_IMPL_OPENGL_LOADER_GLEW")
 endif()
 
-# --- Create imgui library with GLFW + OpenGL3 backends and detected loader ---
+# --- Create imgui library with GLFW + OpenGL3 backends and detected/fallback loader ---
 add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
@@ -115,7 +125,7 @@ add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 
-    # Detected OpenGL loader (GLAD2/GLAD1/GL3W)
+    # Detected OpenGL loader source if present (GLAD2/GLAD1/GL3W)
     ${IMGUI_GL_LOADER_SRC}
 )
 
@@ -126,7 +136,15 @@ target_include_directories(imgui PUBLIC
 )
 
 # Tell the OpenGL3 backend which loader we use
-target_compile_definitions(imgui PUBLIC ${IMGUI_GL_LOADER_DEFINE})
+if(IMGUI_GL_LOADER_DEFINE)
+    target_compile_definitions(imgui PUBLIC ${IMGUI_GL_LOADER_DEFINE})
+endif()
+
+# If using GLEW fallback, link and define GLEW_STATIC
+if(IMGUI_GL_LOADER_DEFINE STREQUAL "IMGUI_IMPL_OPENGL_LOADER_GLEW")
+    target_link_libraries(imgui PUBLIC glew_s)
+    target_compile_definitions(imgui PUBLIC GLEW_STATIC)
+endif()
 
 # Backends need GLFW and OpenGL; link them so consumers don’t have to
 target_link_libraries(imgui PUBLIC
