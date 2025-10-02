@@ -44,9 +44,20 @@ target_link_libraries(magic_eye_gui PRIVATE
 )
 
 # macOS frameworks (GLFW usually adds them; keeping here for robustness)
+# Properly link macOS frameworks (do NOT use quoted "-framework Cocoa")
 if(APPLE)
-  target_link_options(magic_eye_gui PRIVATE
-    "-framework Cocoa" "-framework IOKit" "-framework CoreVideo")
+    find_library(COCOA_FRAMEWORK Cocoa)
+    find_library(IOKIT_FRAMEWORK IOKit)
+    find_library(COREVIDEO_FRAMEWORK CoreVideo)
+    if(NOT COCOA_FRAMEWORK OR NOT IOKIT_FRAMEWORK OR NOT COREVIDEO_FRAMEWORK)
+        message(FATAL_ERROR "Required macOS frameworks not found (Cocoa, IOKit, CoreVideo).")
+    endif()
+
+    target_link_libraries(magic_eye_gui PRIVATE
+        ${COCOA_FRAMEWORK}
+        ${IOKIT_FRAMEWORK}
+        ${COREVIDEO_FRAMEWORK}
+    )
 endif()
 
 # Match the top-level standard
