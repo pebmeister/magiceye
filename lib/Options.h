@@ -1,4 +1,4 @@
-// written by Paul Baxter
+// Written by Paul Baxter (revised)
 #pragma once
 
 #include <string>
@@ -51,4 +51,12 @@ public:
     float smoothWeight = 6.0f; // larger -> milder smoothing
     float rampWidth = 2.5f;
     float rampHeight = 100.0f;
+
+    // New options (non-breaking defaults)
+    bool add_floor = true;          // enable/disable ramp "floor" geometry
+    int  rng_seed = -1;             // <0 -> random_device, otherwise fixed seed for reproducibility
+    bool occlusion = false;          // enable simple occlusion gate in SIRDS linking
+    float occlusion_epsilon = 0.02f;// depth tolerance for occlusion gate
+    bool tile_texture = true;       // true: repeat texture, false: clamp at edges
 };
+

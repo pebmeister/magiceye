@@ -11,7 +11,6 @@
 
 #include "Options.h"
 
-// Your test data structure
 struct TestRunData {
     std::string imagePath;
     std::string depthPath;
@@ -19,7 +18,6 @@ struct TestRunData {
 };
 
 class logger {
-
 private:
     inline static std::string htmlhead = R"(<!DOCTYPE html>
     <head>
@@ -56,7 +54,7 @@ private:
 )";
 
 public:
-    void log(std::ofstream& file, std::vector<TestRunData>dataset)
+    void log(std::ofstream& file, const std::vector<TestRunData>& dataset)
     {
         file << htmlhead;
         file << "<body>\n";
@@ -68,8 +66,8 @@ public:
         std::string im_tex_name = "imagetexture_";
         std::string im_tex_fallback_name = "imagetexturefallback_";
 
-        auto image_num = 0;
-        for (auto& data : dataset) {
+        int image_num = 0;
+        for (const auto& data : dataset) {
             std::string im_suffix = std::to_string(++image_num);
 
             file << R"(
@@ -89,9 +87,9 @@ public:
             file << "</tr>\n";
             file << "<tr>\n<td></td>\n";
             file << R"(
-                <td> 
+                <td>
                     <img id=')"
-                        << im_depth_name << im_suffix << R"(' width="100" style="display:none; " alt="image" 
+                << im_depth_name << im_suffix << R"(' width="100" style="display:none; " alt="image"
                             src=')" << data.depthPath << R"('>
                     <div id=')" << im_depth_fallback_name << im_suffix << R"(' style="border: 1px solid #ccc; padding: 10px;">
                         <em>Loading image...</em>
@@ -99,7 +97,7 @@ public:
                 </td>
                 <td>
                     <img id=')"
-                        << im_load_name << im_suffix << R"(' width="100" style="display:none; " alt="image" 
+                << im_load_name << im_suffix << R"(' width="100" style="display:none; " alt="image"
                             src=')" << data.imagePath << R"('>
                     <div id=')" << im_fallback_name << im_suffix << R"(' style="border: 1px solid #ccc; padding: 10px;">
                         <em>Loading image...</em>
@@ -107,7 +105,7 @@ public:
                 </td>
                 <td>
                     <img id=')"
-                        << im_tex_name << im_suffix << R"(' width="100" style="display:none; " alt="image" 
+                << im_tex_name << im_suffix << R"(' width="100" style="display:none; " alt="image"
                         src=')" << data.options.texpath << R"('>
                     <div id=')" << im_tex_fallback_name << im_suffix << R"(' style="border: 1px solid #ccc; padding: 10px;">
                         <em>Loading image...</em>
@@ -118,22 +116,22 @@ public:
             file <<
                 "<tr>\n" <<
                 "<table>\n" <<
-                    "<tr>\n" <<
-                    "<th>width</th>\n" <<
-                    "<th>height</th>\n" <<
-                    "<th>eye_sep</th>\n" <<
-                    "<th>per</th>\n" <<
-                    R"(<th colspan="3">custom_cam_pos</th>)" << "\n" <<
-                    R"(<th colspan="3">custom_look_at</th>)" << "\n" <<
-                    R"(<th colspan="3">rot_deg</th>)" << "\n" <<
-                    R"(<th colspan="3">trans</th>)" << "\n" <<
-                    R"(<th colspan="3">sc</th>)" << "\n" <<
-                    R"(<th colspan="3">shear</th>)" << "\n" <<
-                    "<th>c pos</th>\n" <<
-                    "<th>lookt</th>\n" <<
-                    "<th>use oscale</th>\n" <<
-                    "<th>lp</th>\n" <<
-                    "<th>lp layers</th>\n" <<
+                "<tr>\n" <<
+                "<th>width</th>\n" <<
+                "<th>height</th>\n" <<
+                "<th>eye_sep</th>\n" <<
+                "<th>per</th>\n" <<
+                R"(<th colspan="3">custom_cam_pos</th>)" << "\n" <<
+                R"(<th colspan="3">custom_look_at</th>)" << "\n" <<
+                R"(<th colspan="3">rot_deg</th>)" << "\n" <<
+                R"(<th colspan="3">trans</th>)" << "\n" <<
+                R"(<th colspan="3">sc</th>)" << "\n" <<
+                R"(<th colspan="3">shear</th>)" << "\n" <<
+                "<th>c pos</th>\n" <<
+                "<th>lookt</th>\n" <<
+                "<th>use oscale</th>\n" <<
+                "<th>lp</th>\n" <<
+                "<th>lp layers</th>\n" <<
                 "</tr>\n";
             file << "<tr>\n" <<
                 R"(    <td class="number"> )" << data.options.width << "</td>\n" <<
@@ -182,7 +180,6 @@ public:
                 "<th>for threshold</th>\n" <<
                 "<th>smooth threshold</th>\n" <<
                 "<th>smooth weight</th>\n" <<
-
                 "</tr>\n";
             file << "<tr>\n" <<
                 R"(    <td class="number"> )" << data.options.custom_orth_scale << "</td>\n" <<
@@ -200,16 +197,14 @@ public:
                 R"(    <td class="number"> )" << data.options.smoothWeight << "</td>\n" <<
                 "</tr>";
 
-            file <<
-                "</tr>\n";
+            file << "</tr>\n";
         }
+
         file << R"(   </table>
     <script>
-
     function setupImage(imgId, fallbackId) {
         var img = document.getElementById(imgId);
         var fallback = document.getElementById(fallbackId);
-
         if (img && fallback) {
             img.onload = function() {
                 img.style.display = 'block';
@@ -223,9 +218,7 @@ public:
             };
         }
     }
-
-    // init the images
-    for (let i = 1; i < )" << image_num + 1 << R"(; i++) {
+    for (let i = 1; i < )" << (int)dataset.size() + 1 << R"(; i++) {
         let load = 'imageload_' + i.toString();
         let fall = 'imagefallback_' + i.toString();
         let depth = 'imagedepth_' + i.toString();
@@ -237,7 +230,6 @@ public:
         setupImage(texture, textfall);
     }
     </script>
-
 </body>
 )";
     }

@@ -1,8 +1,11 @@
-﻿// // written by Paul Baxter
+﻿// Written by Paul Baxter (revised)
 #pragma once
 #include <stl.h>
 #include <iostream>
 #include <exception>
+#include <filesystem>
+#include <algorithm>
+#include <cmath>
 
 #include "Camera.h"
 #include "DepthMapGenerator.h"
@@ -15,23 +18,27 @@
 
 class StereogramGenerator {
 public:
-
     StereogramGenerator(std::shared_ptr<Options>& opt) : options(opt) {}
 
-    // Main entry point for creating a stereogram
     int create()
     {
+        if (!options) throw std::runtime_error("StereogramGenerator::create: Options is null.");
+
         stl mesh;
-        if (options->stlpath.ends_with(".obj")) {
-            // convert OBJ to stl
+
+        // Detect OBJ vs STL using filesystem::path
+        std::filesystem::path p(options->stlpath);
+        std::string ext = p.has_extension() ? p.extension().string() : std::string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+        if (ext == ".obj") {
             if (!OBJToSTL::convert(options->stlpath, mesh)) {
                 throw std::runtime_error("Failed to read OBJ: " + options->stlpath);
             }
         }
         else {
-            // Load STL mesh from file
             if (mesh.read_stl(options->stlpath.c_str()) != 0) {
-                throw std::runtime_error("Failed to read stl: " + options->stlpath);
+                throw std::runtime_error("Failed to read STL: " + options->stlpath);
             }
         }
 
@@ -39,31 +46,27 @@ public:
 
         std::cout << "Loaded triangles: " << mesh.m_num_triangles << "\n";
 
-        // Apply transformations (scale, shear, rotate, translate) to the mesh
         transformMesh(mesh, options);
 
-        // Apply Laplace smoothing
         if (options->laplace_smoothing) {
             smoothSTL(mesh, options->laplace_smooth_layers);
         }
 
-        // Compute the bounding box center and span (size of object in space)
         auto [center, span] = calculateMeshBounds(mesh.m_vectors.data(), mesh.m_num_triangles * 3);
 
-        // Example: Add a floor at the bottom of the mesh bounding box
-        float floor_z = center.z - span * 0.5f; // Place floor below the object
-        float floor_size_x = span * options->rampWidth; // Make floor wide
-        float floor_size_y = span * options->rampWidth; //
-        addFloorMesh(mesh, center.x, center.y, floor_z, floor_size_x, floor_size_y, options->rampHeight);
+        // Optional floor
+        if (options->add_floor && options->rampWidth > 0.0f && options->rampHeight > 0.0f) {
+            float floor_z = center.z - span * 0.5f;
+            float floor_size_x = span * options->rampWidth;
+            float floor_size_y = span * options->rampWidth;
+            addFloorMesh(mesh, center.x, center.y, floor_z, floor_size_x, floor_size_y, options->rampHeight);
+        }
 
-        // Setup camera based on options and bounding box
         Camera cam = setupCamera(options, center, span);
 
-        // Compute orthographic projection scale (if used)
         float ortho_scale = calculateOrthoScale(options, span);
 
-        // Generate depth map from STL mesh
-        float zmin, zmax;
+        float zmin = 0.0f, zmax = 0.0f;
         auto depth = DepthMapGenerator::generate(mesh, options->width, options->height,
             cam, ortho_scale, zmin, zmax,
             options->depth_near, options->depth_far,
@@ -71,20 +74,16 @@ public:
 
         std::cout << "Depth zmin=" << zmin << " zmax=" << zmax << "\n";
 
-        // Save grayscale visualization of depth map for debugging
         saveDepthVisualization(depth, options);
 
-        // Load texture (if provided) or fall back to random-dot pattern
         auto textureData = loadTexture(options);
 
-        // Generate stereogram image (Single Image Random Dot Stereogram)
         std::vector<uint8_t> sirds_rgb;
         SIRDSGenerator::generate(depth, options->width, options->height, options->eye_sep,
             textureData.texture, textureData.tw, textureData.th, textureData.tchan,
             sirds_rgb, options->texture_brightness, options->texture_contrast,
             options->bg_separation, options);
 
-        // Save stereogram image to disk
         saveStereogram(sirds_rgb, options);
 
         return 0;
@@ -93,34 +92,31 @@ public:
 private:
     std::shared_ptr<Options> options;
 
-    // Structure for holding texture data
     struct TextureData {
-        std::vector<uint8_t> texture;  // Raw pixel data
-        int tw = 0;                    // Width
-        int th = 0;                    // Height
-        int tchan = 0;                 // Number of channels (RGB=3, RGBA=4, etc.)
-        bool hasTexture = false;       // True if valid texture loaded
+        std::vector<uint8_t> texture;
+        int tw = 0;
+        int th = 0;
+        int tchan = 0;
+        bool hasTexture = false;
     };
 
-    // Apply transformations from options to mesh vertices
     void transformMesh(stl& mesh, const std::shared_ptr<Options>& options)
     {
         float* vdata = mesh.m_vectors.data();
         size_t vcount = static_cast<size_t>(mesh.m_num_triangles) * 3;
 
-        v::scale(vdata, vcount, options->sc.x, options->sc.y, options->sc.z);
-        v::shear_mesh(vdata, vcount, options->shear.x, options->shear.y, options->shear.z);
-        v::rotateQuaternion(vdata, vcount, options->rot_deg.x, options->rot_deg.y, options->rot_deg.z, glm::vec3(0, 0, 0));
-        v::translate(vdata, vcount, options->trans.x, options->trans.y, options->trans.z);
+        v::scale(vdata, static_cast<uint32_t>(vcount), options->sc.x, options->sc.y, options->sc.z);
+        v::shear_mesh(vdata, static_cast<uint32_t>(vcount), options->shear.x, options->shear.y, options->shear.z);
+        v::rotateQuaternion(vdata, static_cast<uint32_t>(vcount), options->rot_deg.x, options->rot_deg.y, options->rot_deg.z, glm::vec3(0, 0, 0));
+        v::translate(vdata, static_cast<uint32_t>(vcount), options->trans.x, options->trans.y, options->trans.z);
     }
 
-    // Compute mesh bounds → returns center and largest span (size in 3D space)
     std::pair<glm::vec3, float> calculateMeshBounds(const float* vdata, size_t vcount)
     {
         float minx = 1e9f, miny = 1e9f, minz = 1e9f;
         float maxx = -1e9f, maxy = -1e9f, maxz = -1e9f;
 
-        v::min_max(vdata, vcount, minx, maxx, miny, maxy, minz, maxz);
+        v::min_max(vdata, static_cast<uint32_t>(vcount), minx, maxx, miny, maxy, minz, maxz);
 
         glm::vec3 center = { (minx + maxx) * 0.5f, (miny + maxy) * 0.5f, (minz + maxz) * 0.5f };
         float spanx = maxx - minx;
@@ -131,7 +127,6 @@ private:
         return { center, span };
     }
 
-    // Setup camera parameters from options (position, look-at, projection)
     Camera setupCamera(const std::shared_ptr<Options>& options, const glm::vec3& center, float span)
     {
         Camera cam;
@@ -139,7 +134,6 @@ private:
         cam.perspective = (options->perspective);
         cam.fov_deg = options->fov;
 
-        // Camera position
         if (options->custom_cam_provided) {
             cam.position = options->custom_cam_pos;
         }
@@ -147,7 +141,6 @@ private:
             cam.position = { center.x, center.y, center.z + span * 2.5f };
         }
 
-        // Camera look-at target
         if (options->custom_lookat_provided) {
             cam.look_at = options->custom_look_at;
         }
@@ -158,24 +151,20 @@ private:
         return cam;
     }
 
-    // Compute orthographic projection scale based on options and bounding box span
     float calculateOrthoScale(const std::shared_ptr<Options>& options, float span)
     {
         if (options->custom_orth_scale_provided) {
             return options->custom_orth_scale;
         }
 
-        float aspect = static_cast<float>(options->width) / options->height;
-        // Compute default orthographic scale based on mesh span, screen aspect ratio,
-        // and empirical tuning factors (0.6f and 1.2f) to ensure object fits comfortably in view.
+        float aspect = static_cast<float>(options->width) / std::max(1, options->height);
         auto scale = span * options->orthTuneLow * std::max(1.0f / aspect, 1.0f) * options->orthTuneHi;
         return scale;
     }
 
-    // Save depth map visualization as grayscale PNG
     void saveDepthVisualization(const std::vector<float>& depth, const std::shared_ptr<Options>& options)
     {
-        std::vector<uint8_t> depth_vis(options->width * options->height * 3);
+        std::vector<uint8_t> depth_vis(static_cast<size_t>(options->width) * options->height * 3);
         for (int i = 0; i < options->width * options->height; ++i) {
             uint8_t v = static_cast<uint8_t>(std::round(std::clamp(depth[i], 0.0f, 1.0f) * 255.0f));
             depth_vis[i * 3 + 0] = v;
@@ -189,15 +178,12 @@ private:
         std::cout << "Wrote depth visualization: " << depth_out << "\n";
     }
 
-    // Load texture from file if provided, otherwise fallback to random dots
     TextureData loadTexture(const std::shared_ptr<Options>& options)
     {
         TextureData data;
 
-        // FIX: only load if a valid path was provided and not "null"
         if (!options->texpath.empty() && options->texpath != "null") {
-            if (TextureSampler::loadRGB(options->texpath, data.texture,
-                data.tw, data.th, data.tchan)) {
+            if (TextureSampler::loadRGB(options->texpath, data.texture, data.tw, data.th, data.tchan)) {
                 data.hasTexture = true;
                 std::cout << "Loaded texture " << options->texpath << " ("
                     << data.tw << "x" << data.th << " ch=" << data.tchan << ")\n";
@@ -213,7 +199,6 @@ private:
         return data;
     }
 
-    // Save final stereogram (SIRDS) image as PNG
     void saveStereogram(const std::vector<uint8_t>& sirds_rgb, const std::shared_ptr<Options>& options)
     {
         std::string sirds_out = options->outprefix + "_sirds.png";
@@ -222,35 +207,32 @@ private:
         std::cout << "Wrote stereogram: " << sirds_out << "\n";
     }
 
-    // New helper : a bottom “floor strip” whose z varies with y(a ramp)
-    void addFloorMesh(
-        stl & mesh, float cx, float cy, float cz,
+    void addFloorMesh(stl& mesh, float cx, float cy, float cz,
         float size_x, float size_y, float ramp_amount,
-        const glm::vec3 & color = { 0.8f,0.8f,0.8f })
+        const glm::vec3& color = { 0.8f, 0.8f, 0.8f })
     {
-        // Build a strip that occupies the lower half in Y, and is closer near the bottom.
         float halfx = size_x * 0.5f;
         float halfy = size_y * 0.5f;
 
-        // y0 = bottom edge, y1 = mid (so it's just a strip, not the whole frame)
         float y0 = cy - halfy;
-        float y1 = cy; // midline
+        float y1 = cy;
 
-        // z at bottom is closer (larger z), fades to farther (smaller z) at y1
-        float z_far = cz - 0.35f * size_y;              // farther (behind object some)
-        float z_near = z_far + ramp_amount;             // closer to camera
+        float z_far = cz - 0.35f * size_y;
+        float z_near = z_far + ramp_amount;
 
-        glm::vec3 v0 = { cx - halfx, y0, z_near };      // bottom-left (closer)
-        glm::vec3 v1 = { cx + halfx, y0, z_near };      // bottom-right (closer)
-        glm::vec3 v2 = { cx + halfx, y1, z_far };       // mid-right   (farther)
-        glm::vec3 v3 = { cx - halfx, y1, z_far };       // mid-left    (farther)
+        glm::vec3 v0 = { cx - halfx, y0, z_near };
+        glm::vec3 v1 = { cx + halfx, y0, z_near };
+        glm::vec3 v2 = { cx + halfx, y1, z_far };
+        glm::vec3 v3 = { cx - halfx, y1, z_far };
 
         std::vector<float> tris = {
             v0.x,v0.y,v0.z,  v1.x,v1.y,v1.z,  v2.x,v2.y,v2.z,
             v0.x,v0.y,v0.z,  v2.x,v2.y,v2.z,  v3.x,v3.y,v3.z
         };
 
-        for (int i = 0; i < 6; ++i) { mesh.m_rgb_color.insert(mesh.m_rgb_color.end(), { color.r,color.g,color.b }); }
+        for (int i = 0; i < 6; ++i) {
+            mesh.m_rgb_color.insert(mesh.m_rgb_color.end(), { color.r,color.g,color.b });
+        }
         mesh.m_vectors.insert(mesh.m_vectors.end(), tris.begin(), tris.end());
         mesh.m_num_triangles += 2;
     }

@@ -1,28 +1,25 @@
-// written by Paul Baxter
+
+// Written by Paul Baxter (revised)
 #pragma once
 #include <cstdint>
 #include <glm/fwd.hpp>
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 class vectorutils {
 public:
-
     // apply 3d rotation of array using Quaternion
-    static void rotateQuaternion(float* array, uint32_t vcount, float xrot_deg, float yrot_deg, float zrot_deg, const glm::vec3& origin = {0.0f, 0.0f, 0.0f})
+    static void rotateQuaternion(float* array, uint32_t vcount, float xrot_deg, float yrot_deg, float zrot_deg, const glm::vec3& origin = { 0.0f, 0.0f, 0.0f })
     {
-        // Validate input
         if (!array || vcount == 0) return;
 
-        // Construct quaternion from Euler angles
         glm::quat rotation = glm::quat(glm::vec3(glm::radians(xrot_deg), glm::radians(yrot_deg), glm::radians(zrot_deg)));
-
-        // Build transformation matrix
         glm::mat4 toOrigin = glm::translate(glm::mat4(1.0f), -origin);
         glm::mat4 fromOrigin = glm::translate(glm::mat4(1.0f), origin);
-        glm::mat4 rotMatrix = glm::mat4_cast(rotation);
+        glm::mat4 rotMatrix = glm::toMat4(rotation);
         glm::mat4 transform = fromOrigin * rotMatrix * toOrigin;
 
-        // Apply the transformation to each vertex
         for (size_t i = 0; i < vcount; ++i) {
             glm::vec4 v(array[i * 3 + 0], array[i * 3 + 1], array[i * 3 + 2], 1.0f);
             v = transform * v;
@@ -32,23 +29,18 @@ public:
         }
     }
 
-    // apply 3d rotation of array
-    static void rotate(float* array, uint32_t vcount, float xrot_deg, float yrot_deg, float zrot_deg, const glm::vec3& origin = {0, 0, 0})
+    static void rotate(float* array, uint32_t vcount, float xrot_deg, float yrot_deg, float zrot_deg, const glm::vec3& origin = { 0, 0, 0 })
     {
-        // Create rotation matrices
         glm::mat4 rx = glm::rotate(glm::mat4(1.0f), glm::radians(xrot_deg), glm::vec3(1, 0, 0));
         glm::mat4 ry = glm::rotate(glm::mat4(1.0f), glm::radians(yrot_deg), glm::vec3(0, 1, 0));
         glm::mat4 rz = glm::rotate(glm::mat4(1.0f), glm::radians(zrot_deg), glm::vec3(0, 0, 1));
-        glm::mat4 rot = rz * ry * rx; // ZYX order
+        glm::mat4 rot = rz * ry * rx;
 
-        // Translation matrices for moving to/from the origin
         glm::mat4 toOrigin = glm::translate(glm::mat4(1.0f), -origin);
         glm::mat4 fromOrigin = glm::translate(glm::mat4(1.0f), origin);
 
-        // Combined transformation: move to origin, rotate, move back
         glm::mat4 transform = fromOrigin * rot * toOrigin;
 
-        // Apply the transformation to each vertex
         for (size_t i = 0; i < vcount; ++i) {
             glm::vec4 v(array[i * 3 + 0], array[i * 3 + 1], array[i * 3 + 2], 1.0f);
             v = transform * v;
@@ -58,7 +50,6 @@ public:
         }
     }
 
-    // translate array in 3d
     static void translate(float* array, uint32_t vcount, float xoffset, float yoffset, float zoffset)
     {
         for (size_t i = 0; i < vcount; ++i) {
@@ -68,7 +59,6 @@ public:
         }
     }
 
-    // scale an array 3d
     static void scale(float* array, uint32_t vcount, float xscale, float yscale, float zscale)
     {
         for (size_t i = 0; i < vcount; ++i) {
@@ -80,7 +70,6 @@ public:
 
     static void shear_mesh(float* array, uint32_t vcount, float sh_xy, float sh_xz, float sh_yz)
     {
-        // Shear matrix: [1 sh_xy sh_xz; 0 1 sh_yz; 0 0 1]
         glm::mat4 shearMat(1.0f);
         shearMat[1][0] = sh_xy; // y += sh_xy * x
         shearMat[2][0] = sh_xz; // z += sh_xz * x
@@ -109,5 +98,4 @@ public:
             minz = std::min(minz, z); maxz = std::max(maxz, z);
         }
     }
-
 };
