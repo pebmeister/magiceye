@@ -4,7 +4,10 @@ else()
     cmake_minimum_required(VERSION 3.16)
 endif()
 
-cmake_minimum_required(VERSION 3.16)
+# Improve handling of framework properties on macOS
+if(POLICY CMP0112)
+  cmake_policy(SET CMP0112 NEW)
+endif()
 
 project(magic_eye)
 
