@@ -1,37 +1,53 @@
-if(APPLE)
-    cmake_minimum_required(VERSION 3.5)
-else()
-    cmake_minimum_required(VERSION 3.16)
+project(magic_eye_gui LANGUAGES CXX)
+
+include(FetchContent)
+
+# OpenGL
+find_package(OpenGL REQUIRED)
+
+# GLFW: use existing target if present; otherwise fetch it (version matches your top-level)
+if(NOT TARGET glfw)
+  FetchContent_Declare(
+    glfw
+    GIT_REPOSITORY https://github.com/glfw/glfw.git
+    GIT_TAG 3.3.8
+  )
+  set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+  set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(glfw)
 endif()
 
-
-add_executable(magic_eye_gui
-    main.cpp
-    openfile.cpp
-    customwidgets.cpp
+# Sources (add .mm if you have ObjectiveC++ files for macOS)
+file(GLOB GUI_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cxx"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.mm"
 )
 
-# Link to our libraries. imgui already links to glfw and OpenGL::GL publicly,
-# but linking explicitly to glfw is harmless and keeps intent clear.
+add_executable(magic_eye_gui ${GUI_SOURCES})
+
+# Ensure ImGui headers are visible to this target and link the ImGui library
+target_include_directories(magic_eye_gui PRIVATE
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/backends
+)
+
+# Link against core libs, GLFW, OpenGL, and ImGui
 target_link_libraries(magic_eye_gui PRIVATE
+    magic_eye_lib
     imgui
     glfw
     OpenGL::GL
-    stl_lib
 )
 
-# Properly link macOS frameworks (do NOT use quoted "-framework Cocoa")
+# macOS frameworks (GLFW usually adds them; keeping here for robustness)
 if(APPLE)
-    find_library(COCOA_FRAMEWORK Cocoa)
-    find_library(IOKIT_FRAMEWORK IOKit)
-    find_library(COREVIDEO_FRAMEWORK CoreVideo)
-    if(NOT COCOA_FRAMEWORK OR NOT IOKIT_FRAMEWORK OR NOT COREVIDEO_FRAMEWORK)
-        message(FATAL_ERROR "Required macOS frameworks not found (Cocoa, IOKit, CoreVideo).")
-    endif()
-
-    target_link_libraries(magic_eye_gui PRIVATE
-        ${COCOA_FRAMEWORK}
-        ${IOKIT_FRAMEWORK}
-        ${COREVIDEO_FRAMEWORK}
-    )
+  target_link_options(magic_eye_gui PRIVATE
+    "-framework Cocoa" "-framework IOKit" "-framework CoreVideo")
 endif()
+
+# Match the top-level standard
+target_compile_features(magic_eye_gui PRIVATE cxx_std_20)
