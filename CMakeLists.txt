@@ -1,7 +1,16 @@
+CMakeLists.txt
 if(APPLE)
     cmake_minimum_required(VERSION 3.5)
 else()
     cmake_minimum_required(VERSION 3.16)
+endif()
+
+# On macOS, force Apple Clang to ensure -framework flags are accepted
+# Do this before project() so it takes effect during the first configure.
+if(APPLE)
+    # Force compilers into the cache so CC/CXX from the environment don't override them in CI.
+    set(CMAKE_C_COMPILER "/usr/bin/clang" CACHE FILEPATH "C compiler" FORCE)
+    set(CMAKE_CXX_COMPILER "/usr/bin/clang++" CACHE FILEPATH "C++ compiler" FORCE)
 endif()
 
 # Improve handling of framework properties on macOS
@@ -174,3 +183,4 @@ target_link_libraries(imgui PUBLIC
 add_subdirectory(lib)
 add_subdirectory(cli)
 add_subdirectory(gui)
+
