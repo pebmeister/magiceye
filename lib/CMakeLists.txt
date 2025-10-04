@@ -7,19 +7,22 @@ add_library(magic_eye_lib INTERFACE)
 
 # Public headers
 set(MAGIC_EYE_HEADERS
+    BlueNoise.h
     Camera.h
     DepthMapGenerator.h
+    DepthPostProcessor.h
     EdgeSmoother.h
     Laplace.h
     logger.h
     objtostl.h
     Options.h
+    SeparationCalibrator.h
     SIRDSGenerator.h
+    stb_image_impl.h
     StereogramGenerator.h
     Stlsmoother.h
     TextureSampler.h
     vectorutils.h
-    stb_image_impl.h
 )
 list(TRANSFORM MAGIC_EYE_HEADERS PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
 target_sources(magic_eye_lib INTERFACE ${MAGIC_EYE_HEADERS})

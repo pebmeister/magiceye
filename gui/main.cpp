@@ -690,9 +690,8 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
         ImGui::TextUnformatted("Ramp (Width / Height)");
         {
             KnobID("rw", "Width", &opt->rampWidth, 0.0f, 20.0f, 56.0f);
-
             ImGui::SameLine(0, 24);
-            KnobID("rh", "Height", &opt->rampHeight, 0.0f, 1000.0f, 56.0f);
+            KnobID("rh", "Height", &opt->rampHeight, 0.0f, 200.0f, 56.0f);
         }
     }
     ImGui::EndChild();

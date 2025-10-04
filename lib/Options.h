@@ -42,7 +42,7 @@ public:
     float depth_far = 0.1f;
     float texture_brightness = 1.0f;
     float texture_contrast = 1.0f;
-    float bg_separation = 0.6f;
+    float bg_separation = 0.3f;
     float depth_gamma = 1.0f;
     float orthTuneLow = 0.6f;
     float orthTuneHi = 1.2f;
@@ -55,8 +55,8 @@ public:
     // New options (non-breaking defaults)
     bool add_floor = true;          // enable/disable ramp "floor" geometry
     int  rng_seed = -1;             // <0 -> random_device, otherwise fixed seed for reproducibility
-    bool occlusion = false;          // enable simple occlusion gate in SIRDS linking
-    float occlusion_epsilon = 0.02f;// depth tolerance for occlusion gate
+    //bool occlusion = true;          // enable simple occlusion gate in SIRDS linking
+    //float occlusion_epsilon = 0.02f;// depth tolerance for occlusion gate
     bool tile_texture = true;       // true: repeat texture, false: clamp at edges
 };
 

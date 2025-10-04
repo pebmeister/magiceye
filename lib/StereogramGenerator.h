@@ -54,15 +54,13 @@ public:
 
         auto [center, span] = calculateMeshBounds(mesh.m_vectors.data(), mesh.m_num_triangles * 3);
 
+        Camera cam = setupCamera(options, center, span);
+
         // Optional floor
         if (options->add_floor && options->rampWidth > 0.0f && options->rampHeight > 0.0f) {
-            float floor_z = center.z - span * 0.5f;
-            float floor_size_x = span * options->rampWidth;
-            float floor_size_y = span * options->rampWidth;
-            addFloorMesh(mesh, center.x, center.y, floor_z, floor_size_x, floor_size_y, options->rampHeight);
+            addFloorRampFacingCamera(mesh, cam, center, span,
+                options->rampWidth, options->rampHeight);
         }
-
-        Camera cam = setupCamera(options, center, span);
 
         float ortho_scale = calculateOrthoScale(options, span);
 
@@ -205,6 +203,65 @@ private:
         stbi_write_png(sirds_out.c_str(), options->width, options->height, 3,
             sirds_rgb.data(), options->width * 3);
         std::cout << "Wrote stereogram: " << sirds_out << "\n";
+    }
+    
+
+    void addFloorRampFacingCamera(
+        stl& mesh,
+        const Camera& cam,
+        const glm::vec3& center,   // world-space center of the image mesh
+        float span,                // image mesh span (same as before)
+        float rampWidth,           // horizontal width fraction [0..1]
+        float rampHeight,          // forward delta applied to the bottom edge (slope away)
+        const glm::vec3& color = { 0.8f,0.8f,0.8f })
+    {
+        glm::vec3 right, up, forward;
+        cam.computeBasis(right, up, forward);
+        span += span * 0.05f;
+
+        // Make sure 'forward' points from camera into the scene
+        if (glm::dot(center - cam.position, forward) < 0.0f)
+            forward = -forward;
+
+        // Horizontal half-width; reuse rampWidth as a vertical depth fraction (down only)
+        float halfx = span * rampWidth * 0.5f;
+        float depth = span * rampWidth;    // vertical extent below the image
+        float gap = span * 0.01f;        // small gap so it never overlaps the billboard
+
+        // Top edge sits at the bottom edge of the image, minus a tiny gap
+        glm::vec3 topCenter = center - up * (0.5f * span + gap);
+
+        glm::vec3 v0 = topCenter - right * halfx;                               // top-left (touches image bottom)
+        glm::vec3 v1 = topCenter + right * halfx;                               // top-right
+        glm::vec3 v2 = v1 - up * depth + forward * rampHeight;                  // bottom-right (sloped away)
+        glm::vec3 v3 = v0 - up * depth + forward * rampHeight;                  // bottom-left
+
+        // Push the whole quad in front of the near plane if needed (single translate keeps it planar)
+        float eps = 1e-3f;
+        float z0 = glm::dot(v0 - cam.position, forward);
+        float z1 = glm::dot(v1 - cam.position, forward);
+        float z2 = glm::dot(v2 - cam.position, forward);
+        float z3 = glm::dot(v3 - cam.position, forward);
+        float minZ = std::min(std::min(z0, z1), std::min(z2, z3));
+        if (minZ < cam.near_plane + eps) {
+            glm::vec3 delta = forward * ((cam.near_plane + eps) - minZ);
+            v0 += delta; v1 += delta; v2 += delta; v3 += delta;
+        }
+
+        auto emitTriFacingCamera = [&](glm::vec3 a, glm::vec3 b, glm::vec3 c)
+            {
+                glm::vec3 n = glm::cross(b - a, c - a);
+                if (glm::dot(n, forward) > 0.0f) std::swap(b, c);
+
+                mesh.m_vectors.insert(mesh.m_vectors.end(),
+                    { a.x,a.y,a.z, b.x,b.y,b.z, c.x,c.y,c.z });
+                for (int i = 0; i < 3; ++i)
+                    mesh.m_rgb_color.insert(mesh.m_rgb_color.end(), { color.r,color.g,color.b });
+                mesh.m_num_triangles++;
+            };
+
+        emitTriFacingCamera(v0, v1, v2);
+        emitTriFacingCamera(v0, v2, v3);
     }
 
     void addFloorMesh(stl& mesh, float cx, float cy, float cz,
