@@ -1,4 +1,3 @@
-
 #pragma once
 #include <array>
 #include <vector>
@@ -10,6 +9,12 @@
 
 #include "stl.h"
 #include "Camera.h"
+
+// Compile-time toggle for backface culling (off by default).
+// Define MAGIC_EYE_ENABLE_CULLING=1 to enable in your build settings.
+#ifndef MAGIC_EYE_ENABLE_CULLING
+#define MAGIC_EYE_ENABLE_CULLING 0
+#endif
 
 class DepthMapGenerator {
 private:
@@ -66,17 +71,6 @@ private:
         for (size_t i = 1; i + 1 < poly.size(); ++i) {
             outTris.push_back({ poly[0], poly[i], poly[i + 1] });
         }
-    }
-
-    static inline bool barycentric2D(float px, float py, float ax, float ay, float bx, float by,
-        float cx, float cy, float& u, float& v, float& w)
-    {
-        float denom = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
-        if (std::fabs(denom) < tolerance) return false;
-        u = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / denom;
-        v = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / denom;
-        w = 1.0f - u - v;
-        return true;
     }
 
 public:
@@ -159,10 +153,7 @@ private:
             invz[i] = 1.0f / std::max(zcam[i], Camera::kEpsilon);
         }
 
-        // This is currently broken as it makes the ramp vanish.
-        // We need to recreate the ramp to work with this
-        // for now remove culling
-#if CULLING
+#if MAGIC_EYE_ENABLE_CULLING
         // Backface culling in screen space (keep original winding visible)
         float area2 = (ndc_x[1] - ndc_x[0]) * (ndc_y[2] - ndc_y[0]) - (ndc_x[2] - ndc_x[0]) * (ndc_y[1] - ndc_y[0]);
         if (area2 > 0.0f) {
@@ -170,6 +161,7 @@ private:
             return;
         }
 #endif
+
         // NDC -> pixel
         float px[3]{}, py[3]{};
         for (int i = 0; i < 3; ++i) {
@@ -197,8 +189,8 @@ private:
                 float v = ((py[2] - py[0]) * (cx - px[2]) + (px[0] - px[2]) * (cy - py[2])) * invDen;
                 float w = 1.0f - u - v;
 
-                // Inside test
-                if (u < 0 || v < 0 || w < 0) continue;
+                // Inside test (including edges)
+                if (u < 0.0f || v < 0.0f || w < 0.0f) continue;
 
                 // Perspective-correct depth (interpolate 1/z and invert)
                 float invz_interp = u * invz[0] + v * invz[1] + w * invz[2];

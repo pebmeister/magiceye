@@ -626,7 +626,7 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
     ImGui::Dummy(ImVec2(0, 6));
 
     // CARD: Stereo & Texture (explicit height)
-    ImGui::BeginChild("card_stereo_tex", ImVec2(0, line * 17.0f), true, ImGuiWindowFlags_None);
+    ImGui::BeginChild("card_stereo_tex", ImVec2(0, line * 21.0f), true, ImGuiWindowFlags_None);
     {
         ImGui::Text("Stereo & Texture");
         ImGui::Separator();
@@ -659,6 +659,23 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
             opt->orthTuneLow = lo;
             opt->orthTuneHi = hi;
         }
+        
+        ImGui::Dummy(ImVec2(0, 6));
+        ImGui::Separator();
+
+        // Texture tiling (repeat/clamp)
+        ImGui::Checkbox("Tile texture", &opt->tile_texture);
+        ImGui::SameLine(0, 24);
+        // RNG seed (-1 = random_device)
+        CustomWidgets::InputInt("RNG seed (-1=random)", &opt->rng_seed);
+
+        // Occlusion gate
+        ImGui::Checkbox("Occlusion gate", &opt->occlusion);
+        ImGui::BeginDisabled(!opt->occlusion);
+        ImGui::SetNextItemWidth(160);
+        CustomWidgets::InputFloat("Occlusion epsilon", &opt->occlusion_epsilon);
+        ImGui::EndDisabled();
+
     }
     ImGui::EndChild();
     ImGui::Dummy(ImVec2(0, 6));
@@ -687,12 +704,17 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
         ImGui::EndDisabled();
 
         ImGui::Dummy(ImVec2(0, 4));
-        ImGui::TextUnformatted("Ramp (Width / Height)");
+        ImGui::Checkbox("Add floor ramp", &opt->add_floor);
+        ImGui::BeginDisabled(!opt->add_floor);
         {
-            KnobID("rw", "Width", &opt->rampWidth, 0.0f, 20.0f, 56.0f);
-            ImGui::SameLine(0, 24);
-            KnobID("rh", "Height", &opt->rampHeight, 0.0f, 200.0f, 56.0f);
+            ImGui::TextUnformatted("Ramp (Width / Height)");
+            {
+                KnobID("rw", "Width", &opt->rampWidth, 0.0f, 20.0f, 56.0f);
+                ImGui::SameLine(0, 24);
+                KnobID("rh", "Height", &opt->rampHeight, 0.0f, 200.0f, 56.0f);
+            }
         }
+        ImGui::EndDisabled();
     }
     ImGui::EndChild();
     ImGui::Dummy(ImVec2(0, 10));

@@ -3,7 +3,6 @@
 
 #include <string>
 #include <sstream>
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -53,10 +52,9 @@ public:
     float rampHeight = 100.0f;
 
     // New options (non-breaking defaults)
-    bool add_floor = true;          // enable/disable ramp "floor" geometry
-    int  rng_seed = -1;             // <0 -> random_device, otherwise fixed seed for reproducibility
-    //bool occlusion = true;          // enable simple occlusion gate in SIRDS linking
-    //float occlusion_epsilon = 0.02f;// depth tolerance for occlusion gate
-    bool tile_texture = true;       // true: repeat texture, false: clamp at edges
+    bool add_floor = true;              // enable/disable ramp "floor" geometry
+    int  rng_seed = -1;                 // <0 -> random_device, otherwise fixed seed for reproducibility
+    bool occlusion = false;             // enable simple occlusion gate in SIRDS linking
+    float occlusion_epsilon = 0.02f;    // depth tolerance for occlusion gate
+    bool tile_texture = true;           // true: repeat texture, false: clamp at edges};
 };
-

@@ -60,7 +60,7 @@ private:
         std::cerr << "  -shear x,y,z         : Shear model (XY,XZ,YZ  default: "
             << options.shear[0] << "," << options.shear[1] << "," << options.shear[2] << ")\n";
         std::cerr << "  -depthrange near far : Set normalized depth range (default: "
-            << options.depth_near << " " << options.depth_near << "\n";
+            << options.depth_near << " " << options.depth_far << ")\n";
         std::cerr << "  -brightness val      : Texture brightness (0.5-2.0, default: " << options.texture_brightness << ")\n";
         std::cerr << "  -contrast val        : Texture contrast (0.5-2.0, default: " << options.texture_contrast << ")\n";
         std::cerr << "  -fthresh thresh      : Forground threshhold (0-1 default: " << options.foreground_threshold << ")\n";
@@ -70,6 +70,12 @@ private:
         std::cerr << "  -laplacelayers       : Laplace smooth layers (if laplace enabled default: " << options.laplace_smooth_layers << ")\n";
         std::cerr << "  -rwidth              : Ramp width (default: " << options.rampWidth << ")\n";
         std::cerr << "  -rheight             : Ramp height (default: " << options.rampHeight << ")\n";
+        std::cerr << "  -floor true|false     : Enable floor ramp geometry (default: " << options.add_floor << ")\n";
+        std::cerr << "  -seed n               : RNG seed (-1=random device, default: " << options.rng_seed << ")\n";
+        std::cerr << "  -tile true|false      : Tile texture (repeat) (default: " << options.tile_texture << ")\n";
+        std::cerr << "  -occlusion true|false : Enable occlusion gate (default: " << options.occlusion << ")\n";
+        std::cerr << "  -oceps eps            : Occlusion epsilon (default: " << options.occlusion_epsilon << ")\n";
+
     }
 
 public:
@@ -165,7 +171,21 @@ public:
             else if (arg == "-rheight" && i + 1 < argc) {
                 options->rampHeight = parseFloat(argv[++i]);
             }
-            else {
+            else if (arg == "-floor" && i + 1 < argc) {
+                options->add_floor = parseBool(argv[++i]);
+            }
+            else if (arg == "-seed" && i + 1 < argc) {
+                options->rng_seed = std::atoi(argv[++i]);
+            }
+            else if (arg == "-tile" && i + 1 < argc) {
+                options->tile_texture = parseBool(argv[++i]);
+            }
+            else if (arg == "-occlusion" && i + 1 < argc) {
+                options->occlusion = parseBool(argv[++i]);
+            }
+            else if (arg == "-oceps" && i + 1 < argc) {
+                options->occlusion_epsilon = parseFloat(argv[++i]);
+            }            else {
                 printhelp();
                 throw std::invalid_argument("Unknown or incomplete option: " + arg);
             }

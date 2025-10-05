@@ -177,7 +177,7 @@ private:
         applyColors(y, width, uf, rootColor, out_rgb);
     }
 
-    static void buildUnions(int y, int width, const std::vector<float>& adjusted_depth,
+  static void buildUnions(int y, int width, const std::vector<float>& adjusted_depth,
         const std::vector<int>& separation_map, UnionFind& uf,
         const Options& options)
     {
@@ -191,17 +191,17 @@ private:
             if (left >= 0 && right < width) {
                 const float d = adjusted_depth[rowOffset + x];
 
-                //// Stronger occlusion gate: avoid linking if target is significantly nearer (foreground)
-                //if (options.occlusion) {
-                //    const float dl = adjusted_depth[rowOffset + left];
-                //    const float dr = adjusted_depth[rowOffset + right];
-                //    // If match crosses a depth edge where the target is closer to viewer, skip linking.
-                //    const bool occluded_left = (dl + options.occlusion_epsilon < d);
-                //    const bool occluded_right = (dr + options.occlusion_epsilon < d);
-                //    if (occluded_left || occluded_right) {
-                //        continue;
-                //    }
-                //}
+                // Stronger occlusion gate: avoid linking if target is significantly nearer (foreground)
+                if (options.occlusion) {
+                    const float dl = adjusted_depth[rowOffset + left];
+                    const float dr = adjusted_depth[rowOffset + right];
+                    // If match crosses a depth edge where the target is closer to viewer, skip linking.
+                    const bool occluded_left = (dl + options.occlusion_epsilon < d);
+                    const bool occluded_right = (dr + options.occlusion_epsilon < d);
+                    if (occluded_left || occluded_right) {
+                        continue;
+                    }
+                }
 
                 // Keep foreground cohesion horizontally
                 if (d > options.foreground_threshold && x > 0) {
@@ -212,7 +212,8 @@ private:
             }
         }
     }
-
+    
+    
     static void identifyRoots(int width, UnionFind& uf, std::vector<bool>& is_root)
     {
         for (int x = 0; x < width; ++x) {

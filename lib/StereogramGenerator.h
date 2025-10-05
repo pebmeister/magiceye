@@ -1,5 +1,4 @@
-﻿// Written by Paul Baxter (revised)
-#pragma once
+﻿#pragma once
 #include <stl.h>
 #include <iostream>
 #include <exception>
@@ -103,10 +102,10 @@ private:
         float* vdata = mesh.m_vectors.data();
         size_t vcount = static_cast<size_t>(mesh.m_num_triangles) * 3;
 
-        v::scale(vdata, static_cast<uint32_t>(vcount), options->sc.x, options->sc.y, options->sc.z);
-        v::shear_mesh(vdata, static_cast<uint32_t>(vcount), options->shear.x, options->shear.y, options->shear.z);
-        v::rotateQuaternion(vdata, static_cast<uint32_t>(vcount), options->rot_deg.x, options->rot_deg.y, options->rot_deg.z, glm::vec3(0, 0, 0));
-        v::translate(vdata, static_cast<uint32_t>(vcount), options->trans.x, options->trans.y, options->trans.z);
+        vectorutils::scale(vdata, static_cast<uint32_t>(vcount), options->sc.x, options->sc.y, options->sc.z);
+        vectorutils::shear_mesh(vdata, static_cast<uint32_t>(vcount), options->shear.x, options->shear.y, options->shear.z);
+        vectorutils::rotateQuaternion(vdata, static_cast<uint32_t>(vcount), options->rot_deg.x, options->rot_deg.y, options->rot_deg.z, glm::vec3(0, 0, 0));
+        vectorutils::translate(vdata, static_cast<uint32_t>(vcount), options->trans.x, options->trans.y, options->trans.z);
     }
 
     std::pair<glm::vec3, float> calculateMeshBounds(const float* vdata, size_t vcount)
@@ -114,13 +113,13 @@ private:
         float minx = 1e9f, miny = 1e9f, minz = 1e9f;
         float maxx = -1e9f, maxy = -1e9f, maxz = -1e9f;
 
-        v::min_max(vdata, static_cast<uint32_t>(vcount), minx, maxx, miny, maxy, minz, maxz);
+        vectorutils::min_max(vdata, static_cast<uint32_t>(vcount), minx, maxx, miny, maxy, minz, maxz);
 
         glm::vec3 center = { (minx + maxx) * 0.5f, (miny + maxy) * 0.5f, (minz + maxz) * 0.5f };
         float spanx = maxx - minx;
         float spany = maxy - miny;
         float spanz = maxz - minz;
-        float span = std::max({ spanx, spany, spanz, tolerance });
+        float span = std::max({ spanx, spany, spanz, 1e-6f });
 
         return { center, span };
     }
@@ -204,37 +203,40 @@ private:
             sirds_rgb.data(), options->width * 3);
         std::cout << "Wrote stereogram: " << sirds_out << "\n";
     }
-    
 
+    // FIXED: ramp slopes down toward the viewer (front-lower).
+    // We subtract forward * rampHeight so the lower (farther-down) edge
+    // comes closer to the camera, not farther away.
     void addFloorRampFacingCamera(
         stl& mesh,
         const Camera& cam,
         const glm::vec3& center,   // world-space center of the image mesh
         float span,                // image mesh span (same as before)
         float rampWidth,           // horizontal width fraction [0..1]
-        float rampHeight,          // forward delta applied to the bottom edge (slope away)
+        float rampHeight,          // amount to push the front edge toward the camera
         const glm::vec3& color = { 0.8f,0.8f,0.8f })
     {
         glm::vec3 right, up, forward;
         cam.computeBasis(right, up, forward);
         span += span * 0.05f;
 
-        // Make sure 'forward' points from camera into the scene
+        // Ensure 'forward' points from camera into the scene
         if (glm::dot(center - cam.position, forward) < 0.0f)
             forward = -forward;
 
-        // Horizontal half-width; reuse rampWidth as a vertical depth fraction (down only)
         float halfx = span * rampWidth * 0.5f;
-        float depth = span * rampWidth;    // vertical extent below the image
-        float gap = span * 0.01f;        // small gap so it never overlaps the billboard
+        float depth = span * rampWidth;   // vertical extent below the image
+        float gap = span * 0.01f;         // small gap so it never overlaps the billboard
 
         // Top edge sits at the bottom edge of the image, minus a tiny gap
         glm::vec3 topCenter = center - up * (0.5f * span + gap);
 
         glm::vec3 v0 = topCenter - right * halfx;                               // top-left (touches image bottom)
         glm::vec3 v1 = topCenter + right * halfx;                               // top-right
-        glm::vec3 v2 = v1 - up * depth + forward * rampHeight;                  // bottom-right (sloped away)
-        glm::vec3 v3 = v0 - up * depth + forward * rampHeight;                  // bottom-left
+
+        // Bottom edge: further down and closer to camera (front-lower)
+        glm::vec3 v2 = v1 - up * depth - forward * rampHeight;                  // bottom-right (move toward camera)
+        glm::vec3 v3 = v0 - up * depth - forward * rampHeight;                  // bottom-left  (move toward camera)
 
         // Push the whole quad in front of the near plane if needed (single translate keeps it planar)
         float eps = 1e-3f;
@@ -264,6 +266,7 @@ private:
         emitTriFacingCamera(v0, v2, v3);
     }
 
+    // Legacy floor (unused by default); left intact.
     void addFloorMesh(stl& mesh, float cx, float cy, float cz,
         float size_x, float size_y, float ramp_amount,
         const glm::vec3& color = { 0.8f, 0.8f, 0.8f })
@@ -274,6 +277,7 @@ private:
         float y0 = cy - halfy;
         float y1 = cy;
 
+        // Keep original behavior; this helper is not used by default.
         float z_far = cz - 0.35f * size_y;
         float z_near = z_far + ramp_amount;
 
