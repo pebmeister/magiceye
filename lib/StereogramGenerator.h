@@ -42,9 +42,9 @@ public:
         }
 
         mesh.normalizeAndCenter();
-
+#ifdef STL_CLI
         std::cout << "Loaded triangles: " << mesh.m_num_triangles << "\n";
-
+#endif
         transformMesh(mesh, options);
 
         if (options->laplace_smoothing) {
@@ -69,8 +69,9 @@ public:
             options->depth_near, options->depth_far,
             options->bg_separation);
 
+#ifdef STL_CLI
         std::cout << "Depth zmin=" << zmin << " zmax=" << zmax << "\n";
-
+#endif
         saveDepthVisualization(depth, options);
 
         auto textureData = loadTexture(options);
@@ -172,7 +173,9 @@ private:
         std::string depth_out = options->outprefix + "_depth.png";
         stbi_write_png(depth_out.c_str(), options->width, options->height, 3,
             depth_vis.data(), options->width * 3);
+#ifdef STL_CLI
         std::cout << "Wrote depth visualization: " << depth_out << "\n";
+#endif
     }
 
     TextureData loadTexture(const std::shared_ptr<Options>& options)
@@ -182,15 +185,19 @@ private:
         if (!options->texpath.empty() && options->texpath != "null") {
             if (TextureSampler::loadRGB(options->texpath, data.texture, data.tw, data.th, data.tchan)) {
                 data.hasTexture = true;
+#ifdef STL_CLI
                 std::cout << "Loaded texture " << options->texpath << " ("
                     << data.tw << "x" << data.th << " ch=" << data.tchan << ")\n";
+#endif
             }
             else {
                 throw std::runtime_error("Failed to load texture '" + options->texpath + "'");
             }
         }
         else {
+#ifdef STL_CLI
             std::cout << "Using random-dot texture.\n";
+#endif
         }
 
         return data;
@@ -201,7 +208,9 @@ private:
         std::string sirds_out = options->outprefix + "_sirds.png";
         stbi_write_png(sirds_out.c_str(), options->width, options->height, 3,
             sirds_rgb.data(), options->width * 3);
+#ifdef STL_CLI
         std::cout << "Wrote stereogram: " << sirds_out << "\n";
+#endif
     }
 
     // FIXED: ramp slopes down toward the viewer (front-lower).

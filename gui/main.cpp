@@ -54,6 +54,8 @@ static int g_img_w = 0, g_img_h = 0;
 static bool g_has_result = false;
 static GLuint g_tex_sirds = 0;
 static GLuint g_tex_depth = 0;
+static std::string g_render_error_msg;
+static std::atomic<bool> g_render_error_pending{ false };
 
 static std::future<bool> g_render_future;
 static std::atomic<bool> g_is_rendering{ false };
@@ -235,6 +237,18 @@ int main(int, char**)
             ImGui::SetNextWindowPos(ImVec2(460, 60), ImGuiCond_FirstUseEver);
             ImGui::SetNextWindowSize(ImVec2(800, 800), ImGuiCond_FirstUseEver);
             DrawViewport(&viewport_open, g_has_result, g_tex_sirds, g_tex_depth, g_img_w, g_img_h, &viewport_tab);
+       
+            if (g_render_error_pending.exchange(false)) {
+                ImGui::OpenPopup("Render error");
+            }
+            if (ImGui::BeginPopupModal("Render error", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::TextWrapped("%s", g_render_error_msg.c_str());
+                ImGui::Dummy(ImVec2(0, 6));
+                if (ImGui::Button("OK", ImVec2(120, 0))) {
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
         }
 
         // Async render completion
@@ -664,9 +678,11 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
         ImGui::Separator();
 
         // Texture tiling (repeat/clamp)
+        ImGui::SetNextItemWidth(400);
         ImGui::Checkbox("Tile texture", &opt->tile_texture);
-        ImGui::SameLine(0, 24);
+        ImGui::SameLine();
         // RNG seed (-1 = random_device)
+        ImGui::SetNextItemWidth(160);
         CustomWidgets::InputInt("RNG seed (-1=random)", &opt->rng_seed);
 
         // Occlusion gate
@@ -722,7 +738,7 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
     // Footer: Reset & Render
     bool disabled_render = (opt->stlpath.empty() || opt->texpath.empty());
     ImGui::BeginDisabled(disabled_render || g_is_rendering);
-    if (ImGui::Button("Render", ImVec2(ImGui::GetContentRegionAvail().x * 0.55f, 0))) {
+    if (ImGui::Button("Render", ImVec2(160, 0))) {
         g_is_rendering = true;
         g_has_result = false;
         if (g_tex_sirds) { glDeleteTextures(1, &g_tex_sirds); g_tex_sirds = 0; }
@@ -733,20 +749,32 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
 
         g_render_future = std::async(std::launch::async, [o = std::make_shared<Options>(*opt)]() mutable
             {
-                StereogramGenerator st(o);
-                bool ok = !st.create();
-                if (ok) {
-                    g_rendered_image_path = o->outprefix + "_sirds.png";
-                    g_rendered_depth_path = o->outprefix + "_depth.png";
-                    return true;
+                try {
+                    StereogramGenerator st(o);
+                    bool ok = !st.create();  // 0 == success
+                    if (ok) {
+                        g_rendered_image_path = o->outprefix + "_sirds.png";
+                        g_rendered_depth_path = o->outprefix + "_depth.png";
+                        return true;
+                    }
+                    return false;
                 }
-                return false;
+                catch (const std::exception& e) {
+                    g_render_error_msg = e.what();
+                    g_render_error_pending = true;
+                    return false;
+                }
+                catch (...) {
+                    g_render_error_msg = "Unknown exception during render.";
+                    g_render_error_pending = true;
+                    return false;
+                }
             });
     }
     ImGui::EndDisabled();
 
     ImGui::SameLine();
-    if (ImGui::Button("Reset", ImVec2(ImGui::GetContentRegionAvail().x, 0))) {
+    if (ImGui::Button("Reset", ImVec2(160, 0))) {
         std::string stl = opt->stlpath;
         std::string tex = opt->texpath;
         Options reset;
