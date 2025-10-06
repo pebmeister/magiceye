@@ -196,9 +196,9 @@ private:
                     const float dl = adjusted_depth[rowOffset + left];
                     const float dr = adjusted_depth[rowOffset + right];
                     // If match crosses a depth edge where the target is closer to viewer, skip linking.
-                    const bool occluded_left = (dl + options.occlusion_epsilon < d);
-                    const bool occluded_right = (dr + options.occlusion_epsilon < d);
-                    if (occluded_left || occluded_right) {
+                    const bool occluded_left = (dl > d + options.occlusion_epsilon);
+                    const bool occluded_right = (dr > d + options.occlusion_epsilon);
+                    if (occluded_left && occluded_right) {
                         continue;
                     }
                 }
