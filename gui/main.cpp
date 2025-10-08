@@ -123,9 +123,14 @@ int main(int, char**)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
+    auto monitor = glfwGetPrimaryMonitor();
+    float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(monitor);
+    int xpos, ypos, width, height;
+    glfwGetMonitorWorkarea(monitor, &xpos, &ypos, &width, &height);
 
-    float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor());
-    GLFWwindow* window = glfwCreateWindow((int)(1280 * main_scale), (int)(800 * main_scale), "Magic Eye", nullptr, nullptr);
+
+    // GLFWwindow* window = glfwCreateWindow((int)(1280 * main_scale), (int)(800 * main_scale), "Magic Eye", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(width, height -75, "Magic Eye", monitor, nullptr);
     if (window == nullptr)
         return 1;
     glfwMakeContextCurrent(window);
@@ -226,16 +231,17 @@ int main(int, char**)
         }
 
         // Inspector panel
-        ImGui::SetNextWindowPos(ImVec2(20, 60), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(420, 600), ImGuiCond_FirstUseEver);
+        auto insz_x = std::min(420, width / 2);
+        ImGui::SetNextWindowPos(ImVec2(20, 20), /* ImGuiCond_FirstUseEver*/ ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(insz_x, height - 100), /* ImGuiCond_FirstUseEver */ ImGuiCond_Always);
         ImGui::Begin("Inspector - Magic Eye");
         DrawInspector(options.get(), show_stl_openfile, stl_openfile_dialog, show_texture_openfile, texture_openfile_dialog);
         ImGui::End();
 
         // Viewport panel
         if (viewport_open) {
-            ImGui::SetNextWindowPos(ImVec2(460, 60), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSize(ImVec2(800, 800), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowPos(ImVec2(insz_x + 40, 20), ImGuiCond_Always /* ImGuiCond_FirstUseEver */);
+            ImGui::SetNextWindowSize(ImVec2(width - (insz_x + 45), height - 100), ImGuiCond_Always /* ImGuiCond_FirstUseEver */);
             DrawViewport(&viewport_open, g_has_result, g_tex_sirds, g_tex_depth, g_img_w, g_img_h, &viewport_tab);
        
             if (g_render_error_pending.exchange(false)) {
