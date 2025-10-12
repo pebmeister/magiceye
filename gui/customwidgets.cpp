@@ -10,10 +10,9 @@
 // - Getting Started      https://dearimgui.com/getting-started
 // - Documentation        https://dearimgui.com/docs (same as your local docs/ folder).
 // - Introduction, links and more at the top of imgui.cpp
-#include "imgui.h"
 #include <cmath>
 #include <cstdio>
-
+#include "imgui.h"
 #include "imgui_internal.h"
 #include "customwidgets.h"
 

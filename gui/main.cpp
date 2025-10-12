@@ -232,16 +232,16 @@ int main(int, char**)
 
         // Inspector panel
         auto insz_x = std::min(420, width / 2);
-        ImGui::SetNextWindowPos(ImVec2(20, 20), /* ImGuiCond_FirstUseEver*/ ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(insz_x, height - 100), /* ImGuiCond_FirstUseEver */ ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(20, 20), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(insz_x, height - 100), ImGuiCond_FirstUseEver);
         ImGui::Begin("Inspector - Magic Eye");
         DrawInspector(options.get(), show_stl_openfile, stl_openfile_dialog, show_texture_openfile, texture_openfile_dialog);
         ImGui::End();
 
         // Viewport panel
         if (viewport_open) {
-            ImGui::SetNextWindowPos(ImVec2(insz_x + 40, 20), ImGuiCond_Always /* ImGuiCond_FirstUseEver */);
-            ImGui::SetNextWindowSize(ImVec2(width - (insz_x + 45), height - 100), ImGuiCond_Always /* ImGuiCond_FirstUseEver */);
+            ImGui::SetNextWindowPos(ImVec2(insz_x + 40, 20), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(width - (insz_x + 45), height - 100), ImGuiCond_FirstUseEver);
             DrawViewport(&viewport_open, g_has_result, g_tex_sirds, g_tex_depth, g_img_w, g_img_h, &viewport_tab);
        
             if (g_render_error_pending.exchange(false)) {
