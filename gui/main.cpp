@@ -614,11 +614,11 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
         ImGui::Dummy(ImVec2(0, 4));
         ImGui::TextUnformatted("Depth range (Near/Far)");
         // ImGui::SetNextItemWidth(-1);
-        float minv = opt->depth_near;
-        float maxv = opt->depth_far;
-        if (ImGui::DragFloatRange2("##clip", &minv, &maxv, 0.01f, 0.0f, 1000.0f, "N: %.2f", "F: %.2f")) {
-            opt->depth_near = minv;
-            opt->depth_far = maxv;
+        float n = opt->depth_near;
+        float f = opt->depth_far;
+        if (ImGui::DragFloatRange2("##clip", &f, &n, 0.01f, 0.0f, 1000.0f, "F: %.2f", "N: %.2f")) {
+            opt->depth_near = n;
+            opt->depth_far = f;
         }
     }
     ImGui::EndChild();

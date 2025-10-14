@@ -120,6 +120,7 @@
             for (size_t i = 0; i < depth.size(); i++) {
                 // Preserve original upper range behavior (no clamp to 1.0)
                 adjusted_depth[i] = std::max(0.0f, depth[i] * scale);
+                adjusted_depth[i] = std::clamp(adjusted_depth[i], 0.0f, 1.0f);
             }
             return adjusted_depth;
         }
@@ -243,7 +244,6 @@
                 if (d > options.foreground_threshold) {
                     propagated = tryPropagateFromNeighbors(x, y, width, uf, is_root, rootHasColor, rootColor, out_rgb, prev_row_colors, have_prev, color);
                 }
-
 
                 if (!propagated) {
                     if (!texture.empty()) {

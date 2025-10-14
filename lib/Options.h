@@ -41,7 +41,7 @@ public:
     float depth_far = 0.1f;
     float texture_brightness = 1.0f;
     float texture_contrast = 1.0f;
-    float bg_separation = 0.3f;
+    float bg_separation = 0.0f;
     float depth_gamma = 1.0f;
     float orthTuneLow = 0.6f;
     float orthTuneHi = 1.2f;
