@@ -32,7 +32,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install wayland-protocols
+          sudo apt-get install -y wayland-protocols xorg-dev libgl1-mesa-dev ninja-build
           sudo apt-get install -y xorg-dev libgl1-mesa-dev ninja-build
 
       - name: MSVC dev env (Windows)
