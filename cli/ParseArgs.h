@@ -69,8 +69,9 @@ private:
         std::cerr << "  -laplace             : Enable Laplace mesh smoothing (default: " << options.laplace_smoothing << ")\n";
         std::cerr << "  -laplacelayers       : Laplace smooth layers (if laplace enabled default: " << options.laplace_smooth_layers << ")\n";
         std::cerr << "  -rwidth              : Ramp width (default: " << options.rampWidth << ")\n";
-        std::cerr << "  -rheight             : Ramp height (default: " << options.rampHeight << ")\n";
-        std::cerr << "  -floor true|false     : Enable floor ramp geometry (default: " << options.add_floor << ")\n";
+        std::cerr << "  -rangle              : Ramp angle (default: " << options.rampAngle << ")\n";
+        std::cerr << "  -rsep                : Ramp sep (default: " << options.rampSep << ")\n";
+        std::cerr << "  -floor true|false    : Enable floor ramp geometry (default: " << options.add_floor << ")\n";
         std::cerr << "  -seed n               : RNG seed (-1=random device, default: " << options.rng_seed << ")\n";
         std::cerr << "  -tile true|false      : Tile texture (repeat) (default: " << options.tile_texture << ")\n";
         std::cerr << "  -occlusion true|false : Enable occlusion gate (default: " << options.occlusion << ")\n";
@@ -168,8 +169,11 @@ public:
             else if (arg == "-rwidth" && i + 1 < argc) {
                 options->rampWidth = parseFloat(argv[++i]);
             }
-            else if (arg == "-rheight" && i + 1 < argc) {
-                options->rampHeight = parseFloat(argv[++i]);
+            else if (arg == "-rangle" && i + 1 < argc) {
+                options->rampAngle = parseFloat(argv[++i]);
+            }
+            else if (arg == "-rsep" && i + 1 < argc) {
+                options->rampSep = parseFloat(argv[++i]);
             }
             else if (arg == "-floor" && i + 1 < argc) {
                 options->add_floor = parseBool(argv[++i]);

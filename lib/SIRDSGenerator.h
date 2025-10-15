@@ -120,7 +120,7 @@
             for (size_t i = 0; i < depth.size(); i++) {
                 // Preserve original upper range behavior (no clamp to 1.0)
                 adjusted_depth[i] = std::max(0.0f, depth[i] * scale);
-                adjusted_depth[i] = std::clamp(adjusted_depth[i], 0.0f, 1.0f);
+                // adjusted_depth[i] = std::clamp(adjusted_depth[i], 0.0f, 1.0f);
             }
             return adjusted_depth;
         }

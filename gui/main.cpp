@@ -612,11 +612,11 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
         ImGui::EndDisabled();
 
         ImGui::Dummy(ImVec2(0, 4));
-        ImGui::TextUnformatted("Depth range (Near/Far)");
+        ImGui::TextUnformatted("Depth range (Far/Near)");
         // ImGui::SetNextItemWidth(-1);
         float n = opt->depth_near;
         float f = opt->depth_far;
-        if (ImGui::DragFloatRange2("##clip", &f, &n, 0.01f, 0.0f, 1000.0f, "F: %.2f", "N: %.2f")) {
+        if (ImGui::DragFloatRange2("##clip", &f, &n, 0.01f, 0.0f, 2.0f, "F: %.2f", "N: %.2f")) {
             opt->depth_near = n;
             opt->depth_far = f;
         }
@@ -733,7 +733,9 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
             {
                 KnobID("rw", "Width", &opt->rampWidth, 0.0f, 20.0f, 56.0f);
                 ImGui::SameLine(0, 24);
-                KnobID("rh", "Height", &opt->rampHeight, 0.0f, 200.0f, 56.0f);
+                KnobID("ra", "Angle", &opt->rampAngle, 0.0f, 360.0f, 56.0f);
+                ImGui::SameLine(0, 24);
+                KnobID("rs", "RampSep", &opt->rampSep, 0.0f, 1.0f, 56.0f);
             }
         }
         ImGui::EndDisabled();

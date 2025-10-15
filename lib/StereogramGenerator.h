@@ -51,14 +51,16 @@ public:
             smoothSTL(mesh, options->laplace_smooth_layers);
         }
 
-        auto [center, span] = calculateMeshBounds(mesh.m_vectors.data(), mesh.m_num_triangles * 3);
+        auto [center, xyzspan] = calculateMeshBounds(mesh.m_vectors.data(), mesh.m_num_triangles * 3);
+
+        float span = std::max({ xyzspan[0], xyzspan[1], xyzspan[2], 1e-6f});
 
         Camera cam = setupCamera(options, center, span);
 
         // Optional floor
-        if (options->add_floor && options->rampWidth > 0.0f && options->rampHeight > 0.0f) {
-            addFloorRampFacingCamera(mesh, cam, center, span,
-                options->rampWidth, options->rampHeight);
+        if (options->add_floor && options->rampWidth > 0.0f) {
+            addFloorRampFacingCamera(mesh, cam, center, xyzspan,
+                options->rampWidth, options->rampSep, options->rampAngle);
         }
 
         float ortho_scale = calculateOrthoScale(options, span);
@@ -109,7 +111,7 @@ private:
         vectorutils::translate(vdata, static_cast<uint32_t>(vcount), options->trans.x, options->trans.y, options->trans.z);
     }
 
-    std::pair<glm::vec3, float> calculateMeshBounds(const float* vdata, size_t vcount)
+    std::pair<glm::vec3, glm::vec3> calculateMeshBounds(const float* vdata, size_t vcount)
     {
         float minx = 1e9f, miny = 1e9f, minz = 1e9f;
         float maxx = -1e9f, maxy = -1e9f, maxz = -1e9f;
@@ -120,9 +122,9 @@ private:
         float spanx = maxx - minx;
         float spany = maxy - miny;
         float spanz = maxz - minz;
-        float span = std::max({ spanx, spany, spanz, 1e-6f });
+        
 
-        return { center, span };
+        return { center, {spanx, spany, spanz } };
     }
 
     Camera setupCamera(const std::shared_ptr<Options>& options, const glm::vec3& center, float span)
@@ -213,52 +215,82 @@ private:
 #endif
     }
 
-    // FIXED: ramp slopes down toward the viewer (front-lower).
-    // We subtract forward * rampHeight so the lower (farther-down) edge
-    // comes closer to the camera, not farther away.
+
+
     void addFloorRampFacingCamera(
         stl& mesh,
         const Camera& cam,
-        const glm::vec3& center,   // world-space center of the image mesh
-        float span,                // image mesh span (same as before)
-        float rampWidth,           // horizontal width fraction [0..1]
-        float rampHeight,          // amount to push the front edge toward the camera
-        const glm::vec3& color = { 0.8f,0.8f,0.8f })
+        const glm::vec3& center, // world-space center of the image mesh
+        const glm::vec3& xyzspan,   // image mesh span (as before)
+        float rampWidth,         // horizontal width fraction [0..1]
+        float rampSep,
+        float floorAngleDeg,     // 90 = straight toward camera, >90 = slopes down along -up
+        const glm::vec3& color = { 0.8f, 0.8f, 0.8f }
+
+    )
     {
+        auto xspan = xyzspan[0];
+        auto yspan = xyzspan[1];
+        auto zspan = xyzspan[2];
+        float span = std::max({ xspan, yspan, zspan, 1e-6f });
+
         glm::vec3 right, up, forward;
         cam.computeBasis(right, up, forward);
+        xspan += xspan * 0.05f;
+        yspan += yspan * 0.05f;
+        zspan += zspan * 0.05f;
         span += span * 0.05f;
+
 
         // Ensure 'forward' points from camera into the scene
         if (glm::dot(center - cam.position, forward) < 0.0f)
             forward = -forward;
 
-        float halfx = span * rampWidth * 0.5f;
-        float depth = span * rampWidth;   // vertical extent below the image
-        float gap = span * 0.01f;         // small gap so it never overlaps the billboard
+        float halfx = xspan * rampWidth * 0.5f;
+        float gap = yspan * rampSep;   // small gap under the image
 
-        // Top edge sits at the bottom edge of the image, minus a tiny gap
-        glm::vec3 topCenter = center - up * (0.5f * span + gap);
+        // The line we visually attach to (bottom of the image mesh)
+        glm::vec3 topCenter = center - up * (0.5f * yspan + gap);
 
-        glm::vec3 v0 = topCenter - right * halfx;                               // top-left (touches image bottom)
-        glm::vec3 v1 = topCenter + right * halfx;                               // top-right
-
-        // Bottom edge: further down and closer to camera (front-lower)
-        glm::vec3 v2 = v1 - up * depth - forward * rampHeight;                  // bottom-right (move toward camera)
-        glm::vec3 v3 = v0 - up * depth - forward * rampHeight;                  // bottom-left  (move toward camera)
-
-        // Push the whole quad in front of the near plane if needed (single translate keeps it planar)
-        float eps = 1e-3f;
-        float z0 = glm::dot(v0 - cam.position, forward);
-        float z1 = glm::dot(v1 - cam.position, forward);
-        float z2 = glm::dot(v2 - cam.position, forward);
-        float z3 = glm::dot(v3 - cam.position, forward);
-        float minZ = std::min(std::min(z0, z1), std::min(z2, z3));
-        if (minZ < cam.near_plane + eps) {
-            glm::vec3 delta = forward * ((cam.near_plane + eps) - minZ);
-            v0 += delta; v1 += delta; v2 += delta; v3 += delta;
+        // Scan current mesh to find frontmost/farthest distances along 'forward'
+        float dMin = std::numeric_limits<float>::infinity();      // closest to camera
+        float dMax = -std::numeric_limits<float>::infinity();     // farthest from camera
+        const auto& V = mesh.m_vectors;
+        for (size_t i = 0; i + 2 < V.size(); i += 3) {
+            glm::vec3 p(V[i + 0], V[i + 1], V[i + 2]);
+            float d = glm::dot(p - cam.position, forward); // distance along 'forward'
+            dMin = std::min(dMin, d);
+            dMax = std::max(dMax, d);
         }
 
+        // Fallback if the mesh is empty
+        float dTop = glm::dot(topCenter - cam.position, forward);
+        if (!std::isfinite(dMin) || !std::isfinite(dMax)) {
+            dMin = dTop;
+            dMax = dTop;
+        }
+
+        if (dMax < dMin) std::swap(dMax, dMin);
+
+        // Optional: avoid near-plane clipping (keeps the ramp inside the camera frustum)
+        float eps = 1e-3f;
+        float dFront = std::max(dMin, cam.near_plane + eps); // do not exceed mesh's frontmost; clamp to near plane if needed
+
+        float forwardAdvance = glm::max(0.0f, dMax - dFront); // how far we move toward the camera
+        // Angle semantics: 90 = no drop; >90 drops toward -up as we come forward; <90 slopes upward
+        float drop = forwardAdvance * std::tan(glm::radians(floorAngleDeg - 90.0f));
+
+        // Build quad
+        // Back (top) edge: align to the FAR side of the mesh (dMax), so it "starts at the back"
+        glm::vec3 deltaBack = forward * (dMax - dTop);
+        glm::vec3 v0 = topCenter - right * halfx + deltaBack;              // back/top-left
+        glm::vec3 v1 = topCenter + right * halfx + deltaBack;              // back/top-right
+
+        // Front (bottom) edge: at the mesh's FRONT-most distance (dFront), with the requested tilt
+        glm::vec3 v2 = v1 - forward * forwardAdvance - up * drop;          // front/bottom-right
+        glm::vec3 v3 = v0 - forward * forwardAdvance - up * drop;          // front/bottom-left
+
+        // Emit with facing fixed toward the camera
         auto emitTriFacingCamera = [&](glm::vec3 a, glm::vec3 b, glm::vec3 c)
             {
                 glm::vec3 n = glm::cross(b - a, c - a);
@@ -271,39 +303,9 @@ private:
                 mesh.m_num_triangles++;
             };
 
-        emitTriFacingCamera(v0, v1, v2);
-        emitTriFacingCamera(v0, v2, v3);
-    }
-
-    // Legacy floor (unused by default); left intact.
-    void addFloorMesh(stl& mesh, float cx, float cy, float cz,
-        float size_x, float size_y, float ramp_amount,
-        const glm::vec3& color = { 0.8f, 0.8f, 0.8f })
-    {
-        float halfx = size_x * 0.5f;
-        float halfy = size_y * 0.5f;
-
-        float y0 = cy - halfy;
-        float y1 = cy;
-
-        // Keep original behavior; this helper is not used by default.
-        float z_far = cz - 0.35f * size_y;
-        float z_near = z_far + ramp_amount;
-
-        glm::vec3 v0 = { cx - halfx, y0, z_near };
-        glm::vec3 v1 = { cx + halfx, y0, z_near };
-        glm::vec3 v2 = { cx + halfx, y1, z_far };
-        glm::vec3 v3 = { cx - halfx, y1, z_far };
-
-        std::vector<float> tris = {
-            v0.x,v0.y,v0.z,  v1.x,v1.y,v1.z,  v2.x,v2.y,v2.z,
-            v0.x,v0.y,v0.z,  v2.x,v2.y,v2.z,  v3.x,v3.y,v3.z
-        };
-
-        for (int i = 0; i < 6; ++i) {
-            mesh.m_rgb_color.insert(mesh.m_rgb_color.end(), { color.r,color.g,color.b });
+        if (forwardAdvance > 0.0f || std::abs(drop) > 0.0f) {
+            emitTriFacingCamera(v0, v1, v2);
+            emitTriFacingCamera(v0, v2, v3);
         }
-        mesh.m_vectors.insert(mesh.m_vectors.end(), tris.begin(), tris.end());
-        mesh.m_num_triangles += 2;
     }
 };

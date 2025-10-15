@@ -41,7 +41,7 @@ public:
     float depth_far = 0.1f;
     float texture_brightness = 1.0f;
     float texture_contrast = 1.0f;
-    float bg_separation = 0.0f;
+    float bg_separation = 0.2f;
     float depth_gamma = 1.0f;
     float orthTuneLow = 0.6f;
     float orthTuneHi = 1.2f;
@@ -49,7 +49,8 @@ public:
     float smoothThreshold = 0.75f;
     float smoothWeight = 6.0f; // larger -> milder smoothing
     float rampWidth = 2.5f;
-    float rampHeight = 100.0f;
+    float rampAngle = 90.0f;
+    float rampSep = 0.01f;
 
     // New options (non-breaking defaults)
     bool add_floor = true;              // enable/disable ramp "floor" geometry
