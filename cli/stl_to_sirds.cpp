@@ -1,5 +1,7 @@
 // written by Paul Baxter
 
+#define GLM_ENABLE_EXPERIMENTAL
+
 #include <iostream>
 #include <exception>
 

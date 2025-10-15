@@ -1,7 +1,9 @@
-cmake_minimum_required(VERSION 3.20)
+# lib/CMakeLists.txt
+cmake_minimum_required(VERSION 3.16)
 
 # Adopt modern behavior for target_sources relative paths
 cmake_policy(SET CMP0076 NEW)
+
 # Header-only interface library for core functionality
 add_library(magic_eye_lib INTERFACE)
 
@@ -42,3 +44,5 @@ target_link_libraries(magic_eye_lib INTERFACE
 
 # Ensure consumers build with at least C++20 (matches top-level)
 target_compile_features(magic_eye_lib INTERFACE cxx_std_20)
+
+

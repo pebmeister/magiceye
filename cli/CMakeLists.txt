@@ -1,8 +1,5 @@
-if(APPLE)
-    cmake_minimum_required(VERSION 3.5)
-else()
-    cmake_minimum_required(VERSION 3.16)
-endif()
+# cli/CMakeLists.txt
+cmake_minimum_required(VERSION 3.16)
 project(magic_eye_cli LANGUAGES CXX)
 
 # Collect sources
@@ -10,6 +7,7 @@ file(GLOB CLI_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cxx"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.h"
 )
 
 add_executable(magic_eye_cli ${CLI_SOURCES})

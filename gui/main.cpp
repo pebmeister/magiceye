@@ -1,5 +1,7 @@
 // written by Paul Baxter (refactored UI)
 // Dear ImGui + GLFW + OpenGL3
+#define GLM_ENABLE_EXPERIMENTAL
+
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
