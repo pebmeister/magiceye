@@ -27,11 +27,12 @@ jobs:
         run: |
           cmake --version
           python --version || true
-
+  
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
+          sudo apt-get update && sudo apt-get install -y libxkbcommon-dev
           sudo apt-get install -y wayland-protocols libwayland-dev xorg-dev libgl1-mesa-dev ninja-build
 
       - name: MSVC dev env (Windows)
