@@ -1,5 +1,8 @@
+# written by Paul Baxter
 # gui/CMakeLists.txt
 project(magic_eye_gui LANGUAGES CXX)
+
+message (STATUS "gui/CMakeLists.txt")
 
 # OpenGL
 find_package(OpenGL REQUIRED)
@@ -40,4 +43,3 @@ endif()
 
 # Match the top-level standard
 target_compile_features(magic_eye_gui PRIVATE cxx_std_20)
-

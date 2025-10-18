@@ -7,7 +7,6 @@
 
 #define STL_CLI 1
 
-
 #include "Options.h"
 #include "ParseArgs.h"
 #include "StereogramGenerator.h"

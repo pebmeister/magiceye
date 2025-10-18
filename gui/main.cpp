@@ -1,4 +1,4 @@
-// written by Paul Baxter (refactored UI)
+// written by Paul Baxter
 // Dear ImGui + GLFW + OpenGL3
 #define GLM_ENABLE_EXPERIMENTAL
 
@@ -7,10 +7,12 @@
 #include "imgui_impl_opengl3.h"
 #include <locale>
 #include <stdio.h>
+
 #define GL_SILENCE_DEPRECATION
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <GLES2/gl2.h>
 #endif
+
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <thread>
@@ -493,10 +495,18 @@ static void DrawViewport(bool* open, bool has_result, GLuint tex_sirds, GLuint t
     }
     ImVec2 avail = ImGui::GetContentRegionAvail();
     if (!has_result) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 0.6f));
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8);
-        ImGui::TextWrapped("Load a mesh and texture, adjust settings in Inspector, then click Render.");
-        ImGui::PopStyleColor();
+        if (g_is_rendering) {
+            ImGui::SameLine();
+            CustomWidgets::LoadingSpinner("##spinner", 14.0f, 4);
+            ImGui::SameLine();
+            ImGui::TextUnformatted("Rendering...");
+        }
+        else {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 0.6f));
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8);
+            ImGui::TextWrapped("Load a mesh and texture, adjust settings in Inspector, then click Render.");
+            ImGui::PopStyleColor();
+        }        
     }
     else {
         ImVec2 sz = FitInto(avail, img_w, img_h);
@@ -563,8 +573,6 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
         ImGui::Dummy(ImVec2(0, 4));
         // Eye separation knob (no raw ## label shown)
         KnobIntID("eye_sep", "-- Eye separation", &opt->eye_sep, 0, 250, 62.0f);
-        //ImGui::SameLine();
-        //ImGui::Text(" %d", opt->eye_sep);
     }
     ImGui::EndChild();
     ImGui::Dummy(ImVec2(0, 6));
@@ -583,8 +591,6 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
         if (opt->perspective) {
             ImGui::BeginDisabled(!opt->perspective);
             KnobID("fov", "FOV", &opt->fov, 10.0f, 120.0f, 62.0f);
-            //ImGui::SameLine();
-            //ImGui::Text("%.0f deg", opt->fov);
             ImGui::EndDisabled();
         }
         else {
@@ -593,8 +599,6 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
             ImGui::Checkbox("Use Custom Ortho scale", &opt->custom_orth_scale_provided);
             ImGui::BeginDisabled(!opt->custom_orth_scale_provided);
             KnobID("orth", "Ortho scale", &opt->custom_orth_scale, 1.0f, 300.0f, 62.0f);
-            //ImGui::SameLine();
-            //ImGui::Text("%.1f", opt->custom_orth_scale);
             ImGui::EndDisabled();
             ImGui::EndDisabled();
         }
@@ -791,13 +795,6 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
         reset.stlpath = stl;
         reset.texpath = tex;
         *opt = reset;
-    }
-
-    if (g_is_rendering) {
-        ImGui::SameLine();
-        CustomWidgets::LoadingSpinner("##spinner", 14.0f, 4);
-        ImGui::SameLine();
-        ImGui::TextUnformatted("Rendering...");
     }
 }
 

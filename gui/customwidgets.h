@@ -1,7 +1,7 @@
 
 #pragma once
-#include <glm/ext/vector_float3.hpp>
-#include <glm/geometric.hpp>
+#include "vec3.h"
+// gui/CMakeLists.tx
 
 namespace CustomWidgets
 {

@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿// written by Paul Baxter
+#pragma once
 
 #include <glm/glm.hpp>  
 #include <vector>  

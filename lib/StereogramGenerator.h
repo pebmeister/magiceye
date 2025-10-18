@@ -1,5 +1,5 @@
-﻿#pragma once
-#include <stl.h>
+﻿// written by Paul Baxter
+#pragma once
 #include <iostream>
 #include <exception>
 #include <filesystem>
@@ -12,7 +12,7 @@
 #include "Options.h"
 #include "objtostl.h"
 #include "Stlsmoother.h"
-
+#include "stl.h"
 #include "stb_image_impl.h"
 
 class StereogramGenerator {
@@ -215,8 +215,6 @@ private:
 #endif
     }
 
-
-
     void addFloorRampFacingCamera(
         stl& mesh,
         const Camera& cam,
@@ -240,7 +238,6 @@ private:
         yspan += yspan * 0.05f;
         zspan += zspan * 0.05f;
         span += span * 0.05f;
-
 
         // Ensure 'forward' points from camera into the scene
         if (glm::dot(center - cam.position, forward) < 0.0f)

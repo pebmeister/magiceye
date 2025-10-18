@@ -1,4 +1,4 @@
-// Written by Paul Baxter (revised)
+// Written by Paul Baxter
 #pragma once
 
 #include <string>

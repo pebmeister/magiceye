@@ -1,3 +1,4 @@
+// written bu Paul Baxter
 
 #pragma once
 #include <vector>
@@ -55,4 +56,3 @@ public:
         return tex;
     }
 };
-

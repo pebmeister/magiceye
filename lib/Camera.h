@@ -1,4 +1,4 @@
-
+// written by Paul Baxter
 #pragma once
 
 #include <glm/glm.hpp>

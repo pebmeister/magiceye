@@ -25,7 +25,7 @@ namespace CustomWidgets
         ImVec2 pos = window->DC.CursorPos;
         ImVec2 size(radius * 2.0f, (radius + style.FramePadding.y) * 2.0f);
 
-        ImU32 color = ImGui::GetColorU32(ImGuiCol_ButtonHovered);
+        ImU32 color = ImGui::GetColorU32(ImGuiCol_CheckMark /* ImGuiCol_ButtonHovered */ );
         float time = ImGui::GetTime();
         float angle = time * 360.0f; // Rotate at 360 degrees per second
 
@@ -437,8 +437,8 @@ namespace CustomWidgets
             glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(0, 1, 0)));
             glm::vec3 up = glm::normalize(glm::cross(right, fwd));
             glm::vec3 pan = (-d.x * sens) * right + (d.y * sens) * up;
-            look3 += pan;
-            pos3 += pan;
+            look3 = look3 + pan;
+            pos3 = pos3 + pan;
             changed = true;
         }
         // Wheel: dolly

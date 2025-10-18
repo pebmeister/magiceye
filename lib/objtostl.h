@@ -1,3 +1,4 @@
+// written by Paul Baxter
 #pragma once
 
 #include <rapidobj/rapidobj.hpp>
