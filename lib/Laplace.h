@@ -1,18 +1,16 @@
 ﻿// written by Paul Baxter
 #pragma once
-
-#include <glm/glm.hpp>  
-#include <vector>  
+#include <vector>
 #include <unordered_map>  
 #include <unordered_set>  
 #include <algorithm>  
 #include <cstdint>  
 #include <cmath>  
 
-using glm::vec3;
+#include "vec3.h"
 
 // Triangles as indices into V  
-using Tri = glm::ivec3;
+using Tri = glm::vec3;
 
 // -------- Utilities --------  
 
@@ -22,9 +20,9 @@ static inline uint64_t edgeKey(uint32_t a, uint32_t b)
     return (uint64_t(a) << 32) | uint64_t(b);
 }
 
-static inline float cotangent(const vec3& u, const vec3& v)
+static inline float cotangent(const glm::vec3& u, const glm::vec3& v)
 {
-    vec3 c = glm::cross(u, v);
+    glm::vec3 c = glm::cross(u, v);
     float denom = glm::length(c);
     if (denom <= 1e-12f) return 0.0f;
     return glm::dot(u, v) / denom;
@@ -78,7 +76,7 @@ static void buildUniformNeighbors(
 // Build cotangent weights per edge and neighbor lists  
 // We clamp negative weights to zero by default (robustness).  
 static void buildCotanWeights(
-    const std::vector<vec3>& V,
+    const std::vector<glm::vec3>& V,
     const std::vector<Tri>& F,
     std::vector<std::vector<std::pair<int, float>>>& nbrsW,  // (neighbor, weight)  
     std::vector<std::vector<int>>& nbrsIdx,                  // neighbor indices (for fallback)  
@@ -91,9 +89,9 @@ static void buildCotanWeights(
     // Accumulate per-triangle contributions  
     for (const auto& t : F) {
         int i0 = t.x, i1 = t.y, i2 = t.z;
-        const vec3& v0 = V[i0];
-        const vec3& v1 = V[i1];
-        const vec3& v2 = V[i2];
+        const glm::vec3& v0 = V[i0];
+        const glm::vec3& v1 = V[i1];
+        const glm::vec3& v2 = V[i2];
 
         float c0 = 0.5f * cotangent(v1 - v0, v2 - v0); // opposite edge (i1,i2)  
         float c1 = 0.5f * cotangent(v2 - v1, v0 - v1); // opposite edge (i2,i0)  
@@ -133,7 +131,7 @@ static void buildCotanWeights(
 // Xi' = (1 - alpha) Xi + alpha * average(neighbors)  
 // iterations: 5-30; alpha: 0.1 - 0.6  
 void uniformSmooth(
-    std::vector<vec3>& V,
+    std::vector<glm::vec3>& V,
     const std::vector<Tri>& F,
     int iterations,
     float alpha,
@@ -148,9 +146,9 @@ void uniformSmooth(
     std::vector<char> isBoundary;
     computeBoundaryVertices(F, n, isBoundary);
 
-    const std::vector<vec3> Vfixed = V; // original positions for boundary pin  
+    const std::vector<glm::vec3> Vfixed = V; // original positions for boundary pin
 
-    std::vector<vec3> Vnew(n);
+    std::vector<glm::vec3> Vnew(n);
     for (int it = 0; it < iterations; ++it) {
         for (int i = 0; i < n; ++i) {
             if (fixBoundary && isBoundary[i]) {
@@ -160,9 +158,9 @@ void uniformSmooth(
             const auto& N = nbrs[i];
             if (N.empty()) { Vnew[i] = V[i]; continue; }
 
-            vec3 avg(0.0f);
-            for (int j : N) avg += V[j];
-            avg /= float(N.size());
+            glm::vec3 avg(0.0f, 0.0f, 0.0f);
+            for (int j : N) avg = avg + V[j];
+            avg = avg / float(N.size());
             Vnew[i] = (1.0f - alpha) * V[i] + alpha * avg;
         }
         V.swap(Vnew);
@@ -173,7 +171,7 @@ void uniformSmooth(
 // Use small positive lambda (e.g., 0.5) and negative mu (e.g., -0.53).  
 // iterations: ~10–50. Keeps boundaries pinned if desired.  
 void taubinCotanSmooth(
-    std::vector<vec3>& V,
+    std::vector<glm::vec3>& V,
     const std::vector<Tri>& F,
     int iterations,
     float lambda = 0.5f,
@@ -192,11 +190,12 @@ void taubinCotanSmooth(
     std::vector<char> isBoundary;
     computeBoundaryVertices(F, n, isBoundary);
 
-    const std::vector<vec3> Vfixed = V; // keep exact boundary pin  
+    const std::vector<glm::vec3> Vfixed = V; // keep exact boundary pin
 
-    std::vector<vec3> Vtmp(n), Vnew(n);
+    std::vector<glm::vec3> Vtmp(n), Vnew(n);
 
-    auto smoothPass = [&](const std::vector<vec3>& Xin, std::vector<vec3>& Xout, float step)
+    auto smoothPass = [&](const std::vector<glm::vec3>& Xin,
+            std::vector<glm::vec3>& Xout, float step)
         {
             for (int i = 0; i < n; ++i) {
                 if (fixBoundary && isBoundary[i]) {
@@ -207,23 +206,23 @@ void taubinCotanSmooth(
                 const auto& Nidx = nbrsIdx[i];
 
                 // Weighted mean by cotan weights  
-                vec3 weightedSum(0.0f);
+                glm::vec3 weightedSum(0.0f);
                 float sumW = 0.0f;
                 for (auto [j, w] : Wlist) {
                     if (w <= 0.0f) continue;
-                    weightedSum += w * Xin[j];
+                    weightedSum = weightedSum + w * Xin[j];
                     sumW += w;
                 }
 
-                vec3 mean;
+                glm::vec3 mean;
                 if (sumW > 1e-12f) {
                     mean = weightedSum / sumW;
                 }
                 else {
                     // Fallback: uniform mean  
                     if (Nidx.empty()) { Xout[i] = Xin[i]; continue; }
-                    vec3 avg(0.0f);
-                    for (int j : Nidx) avg += Xin[j];
+                    glm::vec3 avg(0.0f);
+                    for (int j : Nidx) avg = avg + Xin[j];
                     mean = avg / float(Nidx.size());
                 }
 

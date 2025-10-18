@@ -1,9 +1,11 @@
 // written by Paul Baxter
 #pragma once
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#include "vec3.h"
+// #include <glm/glm.hpp>
+// #include <glm/gtc/matrix_transform.hpp>
 #include <numbers>
+#include <algorithm>
+#include <cmath>
 
 class Camera {
 public:
@@ -38,7 +40,7 @@ public:
     }
 
     // New: View matrix (right/up/forward basis)
-    glm::mat4 viewMatrix() const
+    [[nodiscard]] glm::mat4 viewMatrix() const
     {
         glm::vec3 r, u, f;
         computeBasis(r, u, f);
@@ -51,7 +53,7 @@ public:
     }
 
     // New: Projection matrix helpers (aspect required)
-    glm::mat4 projectionMatrix(float aspect, float ortho_scale = 1.0f) const
+    [[nodiscard]] glm::mat4 projectionMatrix(float aspect, float ortho_scale = 1.0f) const
     {
         if (perspective) {
             float fov_rad = fov_deg * (std::numbers::pi_v<float> / 180.0f);

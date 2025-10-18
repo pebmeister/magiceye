@@ -2,10 +2,9 @@
 // Written by Paul Baxter (revised)
 #pragma once
 #include <cstdint>
-#include <glm/fwd.hpp>
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/gtc/quaternion.hpp>
-#include <glm/gtx/quaternion.hpp>
+#include <algorithm>
+#include "vec3.h"
+
 
 class vectorutils {
 public:

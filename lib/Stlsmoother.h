@@ -1,15 +1,15 @@
 ﻿// written by Paul Baxter
 #pragma once
 
-#include <glm/glm.hpp>
 #include <unordered_map>
 #include <vector>
 #include <cmath>
+#include "vec3.h"
 #include "Laplace.h"
 #include "stl.h"
 
 using glm::vec3;
-using Tri = glm::ivec3;
+using Tri = glm::vec3;
 
 // --- Deduplication helpers ---
 struct Vec3Hash {
@@ -25,7 +25,10 @@ struct Vec3Hash {
 struct Vec3Equal {
     bool operator()(const vec3& a, const vec3& b) const noexcept
     {
-        return glm::all(glm::epsilonEqual(a, b, 1e-6f));
+        return
+            std::fabs(a.x - b.x) < 1e-6 &&
+            std::fabs(a.y - b.y) < 1e-6 &&
+            std::fabs(a.z - b.z) < 1e-6;
     }
 };
 

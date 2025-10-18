@@ -273,7 +273,7 @@ private:
         float eps = 1e-3f;
         float dFront = std::max(dMin, cam.near_plane + eps); // do not exceed mesh's frontmost; clamp to near plane if needed
 
-        float forwardAdvance = glm::max(0.0f, dMax - dFront); // how far we move toward the camera
+        float forwardAdvance = std::max(0.0f, dMax - dFront); // how far we move toward the camera
         // Angle semantics: 90 = no drop; >90 drops toward -up as we come forward; <90 slopes upward
         float drop = forwardAdvance * std::tan(glm::radians(floorAngleDeg - 90.0f));
 
@@ -296,7 +296,7 @@ private:
                 mesh.m_vectors.insert(mesh.m_vectors.end(),
                     { a.x,a.y,a.z, b.x,b.y,b.z, c.x,c.y,c.z });
                 for (int i = 0; i < 3; ++i)
-                    mesh.m_rgb_color.insert(mesh.m_rgb_color.end(), { color.r,color.g,color.b });
+                    mesh.m_rgb_color.insert(mesh.m_rgb_color.end(), { color[0],color[1],color[2] });
                 mesh.m_num_triangles++;
             };
 

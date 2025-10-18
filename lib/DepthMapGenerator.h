@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include <glm/glm.hpp>
+#include "vec3.h"
 
 #include "stl.h"
 #include "Camera.h"
@@ -26,7 +26,7 @@ private:
         glm::vec3 cam; // camera-space xyz
     };
 
-    // Clip polygon (triangle) against plane z = near using Sutherland–Hodgman in camera space
+    // Clip polygon (triangle) against plane z = near using Sutherlandï¿½Hodgman in camera space
     static inline std::vector<CamVert> clipAgainstNearPlane(const std::vector<CamVert>& in, float znear)
     {
         auto inside = [&](const CamVert& v) { return v.cam.z >= znear; };
