@@ -1,5 +1,6 @@
 Create stereogram
 Now includes a gui that sits on ImGui!
+Tested under Windows, MacOS, Linux and Android
 
 <img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/0d134ff0-4a5a-4698-ac30-31f2c8b0ccd4" />
 
