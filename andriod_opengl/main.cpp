@@ -346,7 +346,7 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
     ImGui::Dummy(ImVec2(0, 6));
 
     // CARD: Transform (explicit height)
-    ImGui::BeginChild("card_transform", ImVec2(0, line * 8.0f), true, ImGuiWindowFlags_None);
+    ImGui::BeginChild("card_transform", ImVec2(0, line * 9.0f), true, ImGuiWindowFlags_None);
     {
         ImGui::Text("Transform");
         ImGui::Separator();
