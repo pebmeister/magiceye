@@ -15,6 +15,14 @@
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
 #include <string>
+#include <atomic>
+#include <future>
+#include <chrono>
+#include <filesystem>
+#include <cstring>
+#include <cmath>
+#include <memory>
+#include <iostream>
 
 // MagicEye includes
 #include "vec3.h"
@@ -46,7 +54,7 @@ static int W, H = 0;
 static EGLDisplay           g_EglDisplay = EGL_NO_DISPLAY;
 static EGLSurface           g_EglSurface = EGL_NO_SURFACE;
 static EGLContext           g_EglContext = EGL_NO_CONTEXT;
-static struct android_app*  g_App = nullptr;
+static struct android_app* g_App = nullptr;
 static bool                 g_Initialized = false;
 static char                 g_LogTag[] = "MagicEye";
 static std::string          g_IniFilename = "";
@@ -65,7 +73,6 @@ static int PollUnicodeChars();
 static int GetAssetData(const char* filename, void** out_data);
 
 // Forward declarations
-static void glfw_error_callback(int error, const char* description);
 static bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height);
 static fs::path resolve_path(const fs::path& input_path);
 static void RequestExit();
@@ -102,19 +109,18 @@ static bool InputTextWithHintStr(const char* label, const char* hint, std::strin
 // Main code
 static void handleAppCmd(struct android_app* app, int32_t appCmd)
 {
-    switch (appCmd)
-    {
-    case APP_CMD_SAVE_STATE:
-        break;
-    case APP_CMD_INIT_WINDOW:
-        Init(app);
-        break;
-    case APP_CMD_TERM_WINDOW:
-        Shutdown();
-        break;
-    case APP_CMD_GAINED_FOCUS:
-    case APP_CMD_LOST_FOCUS:
-        break;
+    switch (appCmd) {
+        case APP_CMD_SAVE_STATE:
+            break;
+        case APP_CMD_INIT_WINDOW:
+            Init(app);
+            break;
+        case APP_CMD_TERM_WINDOW:
+            Shutdown();
+            break;
+        case APP_CMD_GAINED_FOCUS:
+        case APP_CMD_LOST_FOCUS:
+            break;
     }
 }
 
@@ -128,21 +134,18 @@ void android_main(struct android_app* app)
     app->onAppCmd = handleAppCmd;
     app->onInputEvent = handleInputEvent;
 
-    while (true)
-    {
+    while (true) {
         int out_events;
         struct android_poll_source* out_data;
 
         // Poll all events. If the app is not visible, this loop blocks until g_Initialized == true.
-        while (ALooper_pollOnce(g_Initialized ? 0 : -1, nullptr, &out_events, (void**)&out_data) >= 0)
-        {
+        while (ALooper_pollOnce(g_Initialized ? 0 : -1, nullptr, &out_events, (void**)&out_data) >= 0) {
             // Process one event
             if (out_data != nullptr)
                 out_data->process(app, out_data);
 
             // Exit the app by returning from within the infinite loop
-            if (app->destroyRequested != 0)
-            {
+            if (app->destroyRequested != 0) {
                 // shutdown() should have been called already while processing the
                 // app command APP_CMD_TERM_WINDOW. But we play save here
                 if (!g_Initialized)
@@ -200,7 +203,6 @@ void Init(struct android_app* app)
 
         eglQuerySurface(g_EglDisplay, g_EglSurface, EGL_WIDTH, &W);
         eglQuerySurface(g_EglDisplay, g_EglSurface, EGL_HEIGHT, &H);
-
     }
 
     // Setup Dear ImGui context
@@ -224,19 +226,10 @@ void Init(struct android_app* app)
     ImGui_ImplOpenGL3_Init("#version 300 es");
 
     // Load Fonts
-    // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple fonts and use ImGui::PushFont()/PopFont() to select them.
-    // - If the file cannot be loaded, the function will return a nullptr. Please handle those errors in your application (e.g. use an assertion, or display an error and quit).
-    // - Read 'docs/FONTS.md' for more instructions and details. If you like the default font but want it to scale better, consider using the 'ProggyVector' from the same author!
-    // - Remember that in C/C++ if you want to include a backslash \ in a string literal you need to write a double backslash \\ !
-    // - Android: The TTF files have to be placed into the assets/ directory (android/app/src/main/assets), we use our GetAssetData() helper to retrieve them.
-
-    // We load the default font with increased size to improve readability on many devices with "high" DPI.
-    // FIXME: Put some effort into DPI awareness.
-    // Important: when calling AddFontFromMemoryTTF(), ownership of font_data is transferred by Dear ImGui by default (deleted is handled by Dear ImGui), unless we set FontDataOwnedByAtlas=false in ImFontConfig
     ImFontConfig font_cfg;
     font_cfg.SizePixels = 22.0f;
     io.Fonts->AddFontDefault(&font_cfg);
-    
+
     // Arbitrary scale-up
     // FIXME: Put some effort into DPI awareness
     ImGui::GetStyle().ScaleAllSizes(3.0f);
@@ -342,7 +335,6 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
 
         ImGui::Dummy(ImVec2(0, 4));
         ImGui::TextUnformatted("Depth range (Far/Near)");
-        // ImGui::SetNextItemWidth(-1);
         float n = opt->depth_near;
         float f = opt->depth_far;
         if (ImGui::DragFloatRange2("##clip", &f, &n, 0.01f, 0.0f, 2.0f, "F: %.2f", "N: %.2f")) {
@@ -359,16 +351,9 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
         ImGui::Text("Transform");
         ImGui::Separator();
 
-        // ImGui::SetNextItemWidth(-1);
         CustomWidgets::InputFloat3("Rotation", &opt->rot_deg[0]);
-
-        // ImGui::SetNextItemWidth(-1);
         CustomWidgets::InputFloat3("Translation", &opt->trans[0]);
-
-        // ImGui::SetNextItemWidth(-1);
         CustomWidgets::InputFloat3("Scale", &opt->sc[0]);
-
-        // ImGui::SetNextItemWidth(-1);
         CustomWidgets::InputFloat3("Shear", &opt->shear[0]);
     }
     ImGui::EndChild();
@@ -770,8 +755,10 @@ void MainLoopStep()
     static bool show_stl_openfile = false;
     static bool show_texture_openfile = false;
     static std::string root = GetWritableBaseDir().string();
-    static int width = 500;
-    static int height = 300;
+
+    // Layout management: apply a sensible first layout and when display size changes.
+    static bool layout_dirty = true;
+    static ImVec2 last_display_size = ImVec2(0, 0);
 
     static auto stlpath = resolve_path(std::filesystem::absolute(root));
     static auto texturepath = resolve_path(std::filesystem::absolute(root));
@@ -799,6 +786,12 @@ void MainLoopStep()
     ImGui_ImplAndroid_NewFrame();
     ImGui::NewFrame();
 
+    // Detect display size change (orientation, resize, etc.) and mark layout dirty
+    if (last_display_size.x != io.DisplaySize.x || last_display_size.y != io.DisplaySize.y) {
+        layout_dirty = true;
+        last_display_size = io.DisplaySize;
+    }
+
     // Main menu bar at top
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
@@ -814,18 +807,39 @@ void MainLoopStep()
         ImGui::EndMainMenuBar();
     }
 
+    // Compute dynamic layout for Android:
+    // - Inspector takes ~1/4 of the width
+    // - Viewport takes the rest
+    // - Both extend to the bottom with a small margin
+    const float margin = 12.0f;
+    const float menu_h = ImGui::GetFrameHeight();
+    const float top = margin + menu_h;
+    const float left = margin;
+    const float right = margin;
+    const float bottom = margin;
+    const float gap = margin;
+
+    const float full_w = io.DisplaySize.x;
+    const float full_h = io.DisplaySize.y;
+    const float content_h = std::max(1.0f, full_h - top - bottom);
+
+    const float usable_w = std::max(1.0f, full_w - left - right - gap);
+    const float inspector_w = usable_w * 0.25f; // 1/4 of usable width
+    const float viewport_w = usable_w - inspector_w;
+
+    ImGuiCond layout_cond = layout_dirty ? ImGuiCond_Always : ImGuiCond_FirstUseEver;
+
     // Inspector panel
-    auto insz_x = std::min(420, width / 2);
-    ImGui::SetNextWindowPos(ImVec2(20, 20), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(insz_x, height - 100), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(left, top), layout_cond);
+    ImGui::SetNextWindowSize(ImVec2(inspector_w, content_h), layout_cond);
     ImGui::Begin("Inspector - Magic Eye");
     DrawInspector(options.get(), show_stl_openfile, stl_openfile_dialog, show_texture_openfile, texture_openfile_dialog);
     ImGui::End();
 
     // Viewport panel
     if (viewport_open) {
-        ImGui::SetNextWindowPos(ImVec2(insz_x + 40, 20), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(width - (insz_x + 45), height - 100), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(left + inspector_w + gap, top), layout_cond);
+        ImGui::SetNextWindowSize(ImVec2(viewport_w, content_h), layout_cond);
         DrawViewport(&viewport_open, g_has_result, g_tex_sirds, g_tex_depth, g_img_w, g_img_h, &viewport_tab);
 
         if (g_render_error_pending.exchange(false)) {
@@ -840,6 +854,9 @@ void MainLoopStep()
             ImGui::EndPopup();
         }
     }
+
+    // After applying the layout once (on first run or after resize), stop forcing it
+    if (layout_dirty) layout_dirty = false;
 
     // Async render completion
     HandleRenderCompletion(options.get());
@@ -881,8 +898,7 @@ void Shutdown()
     ImGui_ImplAndroid_Shutdown();
     ImGui::DestroyContext();
 
-    if (g_EglDisplay != EGL_NO_DISPLAY)
-    {
+    if (g_EglDisplay != EGL_NO_DISPLAY) {
         eglMakeCurrent(g_EglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 
         if (g_EglContext != EGL_NO_CONTEXT)
@@ -974,15 +990,14 @@ static int PollUnicodeChars()
 }
 
 // Helper to retrieve data placed into the assets/ directory (android/app/src/main/assets)
-static int GetAssetData(const char* filename, void** outData)
+static int GetAssetData(const char* filename, void** out_data)
 {
     int num_bytes = 0;
     AAsset* asset_descriptor = AAssetManager_open(g_App->activity->assetManager, filename, AASSET_MODE_BUFFER);
-    if (asset_descriptor)
-    {
+    if (asset_descriptor) {
         num_bytes = AAsset_getLength(asset_descriptor);
-        *outData = IM_ALLOC(num_bytes);
-        int64_t num_bytes_read = AAsset_read(asset_descriptor, *outData, num_bytes);
+        *out_data = IM_ALLOC(num_bytes);
+        int64_t num_bytes_read = AAsset_read(asset_descriptor, *out_data, num_bytes);
         AAsset_close(asset_descriptor);
         IM_ASSERT(num_bytes_read == num_bytes);
     }
