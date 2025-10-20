@@ -2,6 +2,12 @@
 #include <filesystem>
 #include <vector>
 #include <stack>
+#include <string>
+#include <algorithm>
+
+#if defined(__ANDROID__)
+#include <unordered_map>
+#endif
 
 class openfile {
 public:
@@ -23,12 +29,27 @@ private:
     std::filesystem::path currentdir;
     std::filesystem::path startdir;
 
+#if defined(__ANDROID__)
+    // Map pseudo SAF paths (e.g. /saf/Downloads/Folder) -> content Uri string
+    std::unordered_map<std::string, std::string> saf_map_;
+    bool isSafPath(const std::filesystem::path& p) const
+    {
+        auto s = std::filesystem::absolute(p).string();
+        return s.rfind("/saf/", 0) == 0;
+    }
+    static bool Android_HasDownloadsAccess();
+    static void Android_RequestDownloadsAccess();
+    static std::string Android_GetDownloadsTreeUri();
+    struct SafEntry { bool is_dir; std::string name; std::string uri; };
+    static std::vector<SafEntry> Android_ListChildren(const std::string& tree_uri, const std::vector<std::string>& filters);
+    static std::string Android_CopyDocumentToCache(const std::string& doc_uri);
+#endif
+
     int item_selected_idx = 0;
     int item_highlighted_idx = 0;
     bool item_highlight = true;
     std::string title;
 
-    // Helper function for case-insensitive string comparison
     static bool caseInsensitiveCompare(const std::string& a, const std::string& b)
     {
         return std::lexicographical_compare(
@@ -51,17 +72,15 @@ private:
         item_selected_idx = 0;
         item_highlighted_idx = 0;
 
-        // Note: This logic assumes directories come first in your openfile_items list
         if (item_selected_idx < directories.size()) {
-            // This is a directory
             selecteditem = directories[item_selected_idx];
         }
         else {
-            // This is a file
-            if (files.size() > 0)
+            if (!files.empty())
                 selecteditem = files[item_selected_idx - directories.size()];
         }
 
+        openfile_items.clear();
         for (auto& dir : directories)
             openfile_items.push_back(dir.filename().string());
         for (auto& file : files)
@@ -78,10 +97,8 @@ private:
             buttonname = curname.string();
             if (buttonname.empty())
                 continue;
-
             dirs.push_back({ buttonname, std::filesystem::absolute(curpath) });
             curpath = std::filesystem::absolute(curpath.parent_path());
-
         } while (!buttonname.empty() && dirs.size() < 5);
         return dirs;
     }
@@ -91,12 +108,31 @@ private:
     {
         while (!backHistory.empty())
             backHistory.pop();
-
         if (item_selected_idx >= directories.size()) {
+            // File selected
+#if defined(__ANDROID__)
+            auto abs_sel = std::filesystem::absolute(selecteditem).string();
+            // If it's a SAF pseudo path, copy to cache first
+            auto it = saf_map_.find(abs_sel);
+            if (it != saf_map_.end()) {
+                std::string local = Android_CopyDocumentToCache(it->second);
+                if (!local.empty()) {
+                    selecteditem = std::filesystem::absolute(std::filesystem::path(local));
+                    result = FileSelected;
+                    show = false;
+                }
+                else {
+                    // copy failed; leave dialog open
+                    result = None;
+                }
+                return;
+            }
+#endif
             result = FileSelected;
             show = false;
         }
         else {
+            // Directory selected, navigate into it
             directoryHistory.push(currentdir);
             auto dirindex = item_selected_idx;
             currentdir = std::filesystem::absolute(directories[dirindex]);

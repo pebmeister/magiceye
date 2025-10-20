@@ -51,6 +51,11 @@ static bool                 g_Initialized = false;
 static char                 g_LogTag[] = "MagicEye";
 static std::string          g_IniFilename = "";
 
+#if defined(__ANDROID__)
+extern "C" JavaVM* ME_GetJavaVM() { return g_App ? g_App->activity->vm : nullptr; }
+extern "C" jobject ME_GetActivity() { return g_App ? g_App->activity->clazz : nullptr; }
+#endif
+
 // Forward declarations of helper functions
 static void Init(struct android_app* app);
 static void Shutdown();
@@ -211,10 +216,6 @@ void Init(struct android_app* app)
     io.IniFilename = g_IniFilename.c_str();
 
     auto main_scale = 1.0;
-
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-    //ImGui::StyleColorsLight();
 
     SetupSexyStyle(main_scale);
 
@@ -602,12 +603,11 @@ static bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* 
     return true;
 }
 
-
 // Theme setup
 static void SetupSexyStyle(float scale)
 {
     ImGui::StyleColorsDark();
-    // ImGui::StyleColorsLight();
+#ifdef __USE_CUSTOM_THEME__
     ImGuiStyle& s = ImGui::GetStyle();
     s.ScaleAllSizes(scale);
 
@@ -651,7 +651,9 @@ static void SetupSexyStyle(float scale)
     c[ImGuiCol_TabActive] = ImVec4(0.26f, 0.29f, 0.36f, 1.0f);
     c[ImGuiCol_Text] = text;
     c[ImGuiCol_TextDisabled] = ImVec4(muted.x, muted.y, muted.z, 1.0f);
+#endif
 }
+
 
 // Knob wrappers
 static bool KnobID(const char* id, const char* visible_label, float* v, float v_min, float v_max, float size, int bar_segments, float bar_height, float bar_gap)

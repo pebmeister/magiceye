@@ -426,3 +426,4 @@ FodyWeavers.xsd
 /unittests/texture
 /Linux
 /imgui.ini
+/andriod_opengl/fixforAndriod.txt

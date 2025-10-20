@@ -370,7 +370,7 @@ static fs::path resolve_path(const fs::path& input_path)
 static void SetupSexyStyle(float scale)
 {
     ImGui::StyleColorsDark();
-    // ImGui::StyleColorsLight();
+#ifdef __USE_CUSTOM_THEME__
     ImGuiStyle& s = ImGui::GetStyle();
     s.ScaleAllSizes(scale);
 
@@ -414,6 +414,7 @@ static void SetupSexyStyle(float scale)
     c[ImGuiCol_TabActive] = ImVec4(0.26f, 0.29f, 0.36f, 1.0f);
     c[ImGuiCol_Text] = text;
     c[ImGuiCol_TextDisabled] = ImVec4(muted.x, muted.y, muted.z, 1.0f);
+#endif
 }
 
 // Knob wrappers

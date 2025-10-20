@@ -9,7 +9,7 @@
         android:hasCode="true">
 
         <activity
-            android:name="imgui.example.android.MainActivity"
+            android:name=".MainActivity"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:configChanges="orientation|keyboardHidden|screenSize"
             android:exported="true">

@@ -3,12 +3,16 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+dependencies {
+    implementation "androidx.documentfile:documentfile:1.0.1"
+}
+
 android {
-    namespace 'imgui.example.android'
+    namespace 'magiceye.android'
     compileSdk 36
 
     defaultConfig {
-        applicationId "imgui.example.android"
+        applicationId "magiceye.android"
         minSdk 28
         targetSdk 36
         versionCode 1
