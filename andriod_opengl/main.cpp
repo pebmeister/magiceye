@@ -1,4 +1,4 @@
-// dear imgui: standalone example application for Android + OpenGL ES 3
+// dear imgui: standalone application for Android + OpenGL ES 3
 
 // Learn about Dear ImGui:
 // - FAQ                  https://dearimgui.com/faq
@@ -288,7 +288,7 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
 
         ImGui::Dummy(ImVec2(0, 4));
         // Eye separation knob (no raw ## label shown)
-        KnobIntID("eye_sep", "-- Eye separation", &opt->eye_sep, 0, 250, 62.0f);
+        KnobIntID("eye_sep", "-    Eye separation", &opt->eye_sep, 0, 250, 62.0f);
     }
     ImGui::EndChild();
     ImGui::Dummy(ImVec2(0, 6));
@@ -367,7 +367,7 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
 
         // Row 1: Brightness / Contrast / Separation
         {
-            KnobID("bright", "Brightness", &opt->texture_brightness, 0.2f, 3.0f, 56.0f);
+            KnobID("bright", "  Brightness", &opt->texture_brightness, 0.2f, 3.0f, 56.0f);
             ImGui::SameLine(0, 24);
             KnobID("contrast", "Contrast", &opt->texture_contrast, 0.2f, 3.0f, 56.0f);
 
@@ -425,7 +425,7 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
         ImGui::Checkbox("Smooth edges", &opt->smoothEdges);
         ImGui::BeginDisabled(!opt->smoothEdges);
         {
-            KnobID("sth", "-  Smooth thresh", &opt->smoothThreshold, 0.0f, 1.0f, 56.0f);
+            KnobID("sth", "-    Smooth thresh", &opt->smoothThreshold, 0.0f, 1.0f, 56.0f);
 
             ImGui::SameLine(0, 24);
             KnobID("sw", "Smooth weight", &opt->smoothWeight, 1.0f, 20.0f, 56.0f);
