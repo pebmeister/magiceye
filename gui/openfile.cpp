@@ -1,5 +1,3 @@
-// written by Paul Baxter + Android SAF backend glue
-
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include <stdio.h>
@@ -86,6 +84,84 @@ std::string openfile::Android_GetDownloadsTreeUri()
     s.env->ReleaseStringUTFChars(jres, cstr);
     s.env->DeleteLocalRef(jres);
     return out;
+}
+
+// PICTURES: accessors
+bool openfile::Android_HasPicturesAccess()
+{
+    JniEnvScope s; if (!s.ok()) return false;
+    jobject activity = ME_GetActivity();
+    jclass cls = GetActivityClass(s.env);
+    jmethodID mid = s.env->GetMethodID(cls, "hasPicturesAccess", "()Z");
+    if (!mid) return false;
+    jboolean r = s.env->CallBooleanMethod(activity, mid);
+    return r == JNI_TRUE;
+}
+
+void openfile::Android_RequestPicturesAccess()
+{
+    JniEnvScope s; if (!s.ok()) return;
+    jobject activity = ME_GetActivity();
+    jclass cls = GetActivityClass(s.env);
+    jmethodID mid = s.env->GetMethodID(cls, "requestPicturesAccess", "()V");
+    if (!mid) return;
+    s.env->CallVoidMethod(activity, mid);
+}
+
+std::string openfile::Android_GetPicturesTreeUri()
+{
+    JniEnvScope s; if (!s.ok()) return {};
+    jobject activity = ME_GetActivity();
+    jclass cls = GetActivityClass(s.env);
+    jmethodID mid = s.env->GetMethodID(cls, "getPicturesTreeUri", "()Ljava/lang/String;");
+    if (!mid) return {};
+    jstring jres = (jstring)s.env->CallObjectMethod(activity, mid);
+    if (!jres) return {};
+    const char* cstr = s.env->GetStringUTFChars(jres, nullptr);
+    std::string out = cstr ? cstr : "";
+    s.env->ReleaseStringUTFChars(jres, cstr);
+    s.env->DeleteLocalRef(jres);
+    return out;
+}
+
+// Export a cache file into the user-visible Pictures tree, returns the destination document URI (content://...) or empty on failure.
+std::string openfile::Android_CopyCachePathToPictures(const std::string& cache_path, const std::string& display_name, const std::string& mime_type)
+{
+    JniEnvScope s; if (!s.ok()) return {};
+    jobject activity = ME_GetActivity();
+    jclass cls = GetActivityClass(s.env);
+    jmethodID mid = s.env->GetMethodID(cls, "copyCachePathToPictures", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+    if (!mid) return {};
+    jstring jpath = s.env->NewStringUTF(cache_path.c_str());
+    jstring jname = s.env->NewStringUTF(display_name.c_str());
+    jstring jmime = s.env->NewStringUTF(mime_type.c_str());
+    jstring jres = (jstring)s.env->CallObjectMethod(activity, mid, jpath, jname, jmime);
+    s.env->DeleteLocalRef(jpath);
+    s.env->DeleteLocalRef(jname);
+    s.env->DeleteLocalRef(jmime);
+    if (!jres) return {};
+    const char* cstr = s.env->GetStringUTFChars(jres, nullptr);
+    std::string out = cstr ? cstr : "";
+    s.env->ReleaseStringUTFChars(jres, cstr);
+    s.env->DeleteLocalRef(jres);
+    return out;
+}
+
+// Launches Android share sheet for a document/content URI and mime-type.
+void openfile::Android_ShareDocumentUri(const std::string& doc_uri, const std::string& mime_type, const std::string& subject)
+{
+    JniEnvScope s; if (!s.ok()) return;
+    jobject activity = ME_GetActivity();
+    jclass cls = GetActivityClass(s.env);
+    jmethodID mid = s.env->GetMethodID(cls, "shareDocumentUri", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+    if (!mid) return;
+    jstring juri = s.env->NewStringUTF(doc_uri.c_str());
+    jstring jmime = s.env->NewStringUTF(mime_type.c_str());
+    jstring jsubject = s.env->NewStringUTF(subject.c_str());
+    s.env->CallVoidMethod(activity, mid, juri, jmime, jsubject);
+    s.env->DeleteLocalRef(juri);
+    s.env->DeleteLocalRef(jmime);
+    s.env->DeleteLocalRef(jsubject);
 }
 
 std::vector<openfile::SafEntry> openfile::Android_ListChildren(const std::string& tree_uri, const std::vector<std::string>& filters)
@@ -294,7 +370,7 @@ openfile::Result openfile::show(bool& show)
             directoryHistory.push(currentdir);
 #if defined(__ANDROID__)
             auto parent = std::filesystem::absolute(currentdir.parent_path());
-            // If in SAF root (/saf/Downloads), going up would leave SAF; bounce to startdir instead.
+            // If in SAF root (/saf/Downloads or /saf/Pictures), going up would leave SAF; bounce to startdir instead.
             if (isSafPath(currentdir) && !isSafPath(parent)) {
                 currentdir = std::filesystem::absolute(std::filesystem::path(startdir));
             }
@@ -354,12 +430,28 @@ openfile::Result openfile::show(bool& show)
                 openfile_items.clear();
             }
         }
+        ImGui::SameLine();
+        if (ImGui::Button("Pictures")) {
+            std::string uri = Android_GetPicturesTreeUri();
+            if (uri.empty()) {
+                Android_RequestPicturesAccess();
+            }
+            else {
+                std::filesystem::path safRoot("/saf/Pictures");
+                saf_map_[std::filesystem::absolute(safRoot).string()] = uri;
+                while (!backHistory.empty()) backHistory.pop();
+                while (!directoryHistory.empty()) directoryHistory.pop();
+                currentdir = std::filesystem::absolute(safRoot);
+                openfile_items.clear();
+            }
+        }
 #endif
 
         // Path crumbs
         for (auto& dir : dirs | std::views::reverse) {
 #if defined(__ANDROID__)
-            if (dir.first == "Downloads")
+            // Avoid duplicating pseudo SAF roots in crumbs
+            if (dir.first == "Downloads" || dir.first == "Pictures")
                 continue;
 #endif
             if (ImGui::Button(dir.first.c_str())) {
@@ -434,3 +526,4 @@ openfile::Result openfile::show(bool& show)
     ImGui::End();
     return result;
 }
+

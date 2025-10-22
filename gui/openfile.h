@@ -39,10 +39,19 @@ private:
     }
     static bool Android_HasDownloadsAccess();
     static void Android_RequestDownloadsAccess();
+    static bool Android_HasPicturesAccess();
+    static void Android_RequestPicturesAccess();
+
     static std::string Android_GetDownloadsTreeUri();
+    static std::string Android_GetPicturesTreeUri();
+
     struct SafEntry { bool is_dir; std::string name; std::string uri; };
     static std::vector<SafEntry> Android_ListChildren(const std::string& tree_uri, const std::vector<std::string>& filters);
     static std::string Android_CopyDocumentToCache(const std::string& doc_uri);
+    static std::string Android_CopyCachePathToPictures(const std::string& cache_path, const std::string& display_name, const std::string& mime_type);
+
+    static void Android_ShareDocumentUri(const std::string& doc_uri, const std::string& mime_type, const std::string& subject);
+
 #endif
 
     int item_selected_idx = 0;
