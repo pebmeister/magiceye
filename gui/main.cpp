@@ -234,18 +234,37 @@ int main(int, char**)
             ImGui::EndMainMenuBar();
         }
 
+        // - Both extend to the bottom with a small margin
+        const float margin = 12.0f;
+        const float menu_h = ImGui::GetFrameHeight();
+        const float top = margin + menu_h;
+        const float left = margin;
+        const float right = margin;
+        const float bottom = margin;
+        const float gap = margin;
+
+        const float full_w = io.DisplaySize.x;
+        const float full_h = io.DisplaySize.y;
+        const float content_h = std::max(1.0f, full_h - top - bottom);
+
+        const float usable_w = std::max(1.0f, full_w - left - right - gap);
+        const float inspector_w = usable_w * 0.25f; // 1/4 of usable width
+        const float viewport_w = usable_w - inspector_w;
+
+        ImGuiCond layout_cond = ImGuiCond_FirstUseEver;
+
+
         // Inspector panel
-        auto insz_x = std::min(420, width / 2);
-        ImGui::SetNextWindowPos(ImVec2(20, 20), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(insz_x, height - 100), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(left, top), layout_cond);
+        ImGui::SetNextWindowSize(ImVec2(inspector_w, content_h), layout_cond);
         ImGui::Begin("Inspector - Magic Eye");
         DrawInspector(options.get(), show_stl_openfile, stl_openfile_dialog, show_texture_openfile, texture_openfile_dialog);
         ImGui::End();
 
         // Viewport panel
         if (viewport_open) {
-            ImGui::SetNextWindowPos(ImVec2(insz_x + 40, 20), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSize(ImVec2(width - (insz_x + 45), height - 100), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowPos(ImVec2(left + inspector_w + gap, top), layout_cond);
+            ImGui::SetNextWindowSize(ImVec2(viewport_w, content_h), layout_cond);
             DrawViewport(&viewport_open, g_has_result, g_tex_sirds, g_tex_depth, g_img_w, g_img_h, &viewport_tab);
        
             if (g_render_error_pending.exchange(false)) {
