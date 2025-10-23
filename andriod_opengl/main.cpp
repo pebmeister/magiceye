@@ -46,6 +46,7 @@ static std::future<bool> g_render_future;
 static std::atomic<bool> g_is_rendering{ false };
 static std::string g_rendered_image_path;
 static std::string g_rendered_depth_path;
+static bool g_prev_render = false;
 
 /////////////////////////////
 
@@ -459,7 +460,6 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
     if (ImGui::Button("Render", ImVec2(160, 0))) {
         g_is_rendering = true;
         g_has_result = false;
-
         if (g_tex_sirds) { glDeleteTextures(1, &g_tex_sirds); g_tex_sirds = 0; }
         if (g_tex_depth) { glDeleteTextures(1, &g_tex_depth); g_tex_depth = 0; }
 
@@ -751,7 +751,6 @@ void MainLoopStep()
     static bool viewport_open = false;
     static bool show_stl_openfile = false;
     static bool show_texture_openfile = false;
-    static bool last_rendering = g_is_rendering;
     static std::string root = GetWritableBaseDir().string();
 
     // Layout management: apply a sensible first layout and when display size changes.
@@ -821,26 +820,25 @@ void MainLoopStep()
     const float full_h = io.DisplaySize.y;
     const float content_h = std::max(1.0f, full_h - top - bottom);
 
-    const float usable_w = std::max(1.0f, full_w - left - right - gap);    
-
-    float inspector_w = usable_w; // *0.25f; // 1/4 of usable width
-    float viewport_w = usable_w; // -inspector_w;
+    const float usable_w = std::max(1.0f, full_w - left - right - gap);
+    const float inspector_w = usable_w;
+    const float viewport_w = usable_w;
 
     ImGuiCond layout_cond = layout_dirty ? ImGuiCond_Always : ImGuiCond_FirstUseEver;
 
     // Inspector panel
     ImGui::SetNextWindowPos(ImVec2(left, top), layout_cond);
     ImGui::SetNextWindowSize(ImVec2(inspector_w, content_h), layout_cond);
-
     ImGui::Begin("Inspector - Magic Eye");
     DrawInspector(options.get(), show_stl_openfile, stl_openfile_dialog, show_texture_openfile, texture_openfile_dialog);
     ImGui::End();
-    if (last_rendering != g_is_rendering) {
-        last_rendering = g_is_rendering;
+    if (g_prev_render != g_is_rendering) {
+        g_prev_render = g_is_rendering;
         if (g_is_rendering) {
             viewport_open = true;
         }
     }
+
     // Viewport panel
     if (viewport_open) {
         ImGui::SetNextWindowPos(ImVec2(left, top), layout_cond);
