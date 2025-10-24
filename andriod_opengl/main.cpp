@@ -23,6 +23,7 @@
 #include <cmath>
 #include <memory>
 #include <iostream>
+#include <vector>
 
 // MagicEye includes
 #include "vec3.h"
@@ -89,7 +90,8 @@ static void DrawViewport(bool* open, bool has_result, GLuint tex_sirds, GLuint t
 static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_openfile_dialog, bool& show_texture_openfile, openfile& texture_openfile_dialog);
 static void HandleRenderCompletion(Options* opt);
 static fs::path GetWritableBaseDir();
-
+static void Android_ShareCacheFilePath(const std::string& path, const std::string& mime, const std::string& subject);
+static void Android_ShareCacheFilePaths(const std::vector<std::string>& paths, const std::string& mime, const std::string& subject);
 
 // Small wrapper to use std::string with InputTextWithHint without imgui_stdlib
 static bool InputTextWithHintStr(const char* label, const char* hint, std::string& str, ImGuiInputTextFlags flags = 0)
@@ -400,7 +402,7 @@ static void DrawInspector(Options* opt, bool& show_stl_openfile, openfile& stl_o
         ImGui::SameLine();
         // RNG seed (-1 = random_device)
         ImGui::SetNextItemWidth(160);
-        CustomWidgets::InputInt("RNG seed (-1=random)", &opt->rng_seed);
+        CustomWidgets::InputInt("RNG seed", &opt->rng_seed);
 
         // Occlusion gate
         ImGui::Checkbox("Occlusion gate", &opt->occlusion);
@@ -732,12 +734,36 @@ static void DrawViewport(bool* open, bool has_result, GLuint tex_sirds, GLuint t
         }
     }
     else {
+        // Center-fit image
         ImVec2 sz = FitInto(avail, img_w, img_h);
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail.x - sz.x) * 0.5f);
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (avail.y - sz.y) * 0.5f);
         GLuint t = (*tab_idx == 0 ? tex_sirds : tex_depth);
         if (t)
             ImGui::Image((ImTextureID)t, sz);
+
+#if defined(__ANDROID__)
+        // Share controls (Android only)
+        ImGui::Dummy(ImVec2(0, 10));
+        ImGui::Separator();
+        ImGui::Text("Share");
+        ImGui::BeginDisabled(g_is_rendering || !has_result);
+        {
+            if (ImGui::Button("Share SIRDS")) {
+                Android_ShareCacheFilePath(g_rendered_image_path, "image/png", "MagicEye SIRDS");
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Share Depth")) {
+                Android_ShareCacheFilePath(g_rendered_depth_path, "image/png", "MagicEye Depth");
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Share both")) {
+                std::vector<std::string> paths{ g_rendered_image_path, g_rendered_depth_path };
+                Android_ShareCacheFilePaths(paths, "image/*", "MagicEye images");
+            }
+        }
+        ImGui::EndDisabled();
+#endif
     }
     ImGui::EndChild();
 
@@ -866,7 +892,7 @@ void MainLoopStep()
 
     // File dialogs (position near top-left)
     if (show_stl_openfile) {
-        ImGui::SetNextWindowPos(ImVec2(40, 90), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(left, top), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(560, 700), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowFocus();
         auto result = stl_openfile_dialog.show(show_stl_openfile);
@@ -1019,3 +1045,75 @@ static fs::path GetWritableBaseDir()
     const char* in = g_App->activity->internalDataPath;
     return fs::path((ext && *ext) ? ext : in);
 }
+
+#if defined(__ANDROID__)
+// Small RAII helper to attach JNI per thread
+struct JniEnvScope {
+    JNIEnv* env{ nullptr };
+    bool attached{ false };
+    JniEnvScope()
+    {
+        JavaVM* vm = ME_GetJavaVM();
+        if (!vm) return;
+        if (vm->GetEnv((void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+            if (vm->AttachCurrentThread(&env, nullptr) == JNI_OK) attached = true;
+        }
+    }
+    ~JniEnvScope()
+    {
+        if (attached) {
+            ME_GetJavaVM()->DetachCurrentThread();
+        }
+    }
+    bool ok() const { return env != nullptr; }
+};
+
+static jclass GetActivityClass(JNIEnv* env)
+{
+    jobject activity = ME_GetActivity();
+    return env->GetObjectClass(activity);
+}
+
+// Share a single cache file path using MainActivity.shareCacheFilePath(...)
+static void Android_ShareCacheFilePath(const std::string& path, const std::string& mime, const std::string& subject)
+{
+    JniEnvScope s; if (!s.ok()) return;
+    jobject activity = ME_GetActivity();
+    jclass cls = GetActivityClass(s.env);
+    jmethodID mid = s.env->GetMethodID(cls, "shareCacheFilePath", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+    if (!mid) return;
+    jstring jpath = s.env->NewStringUTF(path.c_str());
+    jstring jmime = s.env->NewStringUTF(mime.c_str());
+    jstring jsub = s.env->NewStringUTF(subject.c_str());
+    s.env->CallVoidMethod(activity, mid, jpath, jmime, jsub);
+    s.env->DeleteLocalRef(jpath);
+    s.env->DeleteLocalRef(jmime);
+    s.env->DeleteLocalRef(jsub);
+}
+
+// Share multiple cache file paths using MainActivity.shareCacheFilePaths(...)
+static void Android_ShareCacheFilePaths(const std::vector<std::string>& paths, const std::string& mime, const std::string& subject)
+{
+    JniEnvScope s; if (!s.ok()) return;
+    jobject activity = ME_GetActivity();
+    jclass cls = GetActivityClass(s.env);
+    jmethodID mid = s.env->GetMethodID(cls, "shareCacheFilePaths", "([Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+    if (!mid) return;
+
+    jclass strCls = s.env->FindClass("java/lang/String");
+    jobjectArray jarr = s.env->NewObjectArray((jsize)paths.size(), strCls, nullptr);
+    for (jsize i = 0; i < (jsize)paths.size(); ++i) {
+        jstring jp = s.env->NewStringUTF(paths[i].c_str());
+        s.env->SetObjectArrayElement(jarr, i, jp);
+        s.env->DeleteLocalRef(jp);
+    }
+
+    jstring jmime = s.env->NewStringUTF(mime.c_str());
+    jstring jsub = s.env->NewStringUTF(subject.c_str());
+    s.env->CallVoidMethod(activity, mid, jarr, jmime, jsub);
+
+    s.env->DeleteLocalRef(jarr);
+    s.env->DeleteLocalRef(jmime);
+    s.env->DeleteLocalRef(jsub);
+}
+#endif

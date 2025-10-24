@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
     implementation 'androidx.documentfile:documentfile:1.1.0'
+    implementation "androidx.core:core-ktx:1.13.1"    // brings in androidx.core:core
 }
 
 android {

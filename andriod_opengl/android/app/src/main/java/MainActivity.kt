@@ -9,7 +9,9 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.DocumentsContract
 import android.view.KeyEvent
+import android.content.ContentResolver
 import android.view.inputmethod.InputMethodManager
+import androidx.core.content.FileProvider
 import androidx.documentfile.provider.DocumentFile
 
 class MainActivity : NativeActivity() {
@@ -54,10 +56,9 @@ class MainActivity : NativeActivity() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
         intent.addFlags(
             Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION
         )
-        // Try to hint Downloads as initial
         val initial = downloadsInitialUri()
         if (initial != null) {
             intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, initial)
@@ -76,10 +77,8 @@ class MainActivity : NativeActivity() {
     }
 
     private fun downloadsInitialUri(): Uri? {
-        // Note: EXTRA_INITIAL_URI is a hint. It may not be honored on all devices.
         return try {
             if (Build.VERSION.SDK_INT >= 26) {
-                // Downloads provider root document
                 DocumentsContract.buildDocumentUri(
                     "com.android.providers.downloads.documents",
                     "downloads"
@@ -102,10 +101,9 @@ class MainActivity : NativeActivity() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
         intent.addFlags(
             Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION
         )
-        // Try to hint the Pictures directory on primary external storage
         val initial = picturesInitialUri()
         if (initial != null) {
             intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, initial)
@@ -126,7 +124,6 @@ class MainActivity : NativeActivity() {
     private fun picturesInitialUri(): Uri? {
         return try {
             if (Build.VERSION.SDK_INT >= 26) {
-                // External storage provider -> primary:Pictures directory
                 DocumentsContract.buildDocumentUri(
                     "com.android.externalstorage.documents",
                     "primary:Pictures"
@@ -161,7 +158,6 @@ class MainActivity : NativeActivity() {
 
     // ------------------------ SAF helpers -----------------------------------
 
-    // Build a DocumentFile for either a tree or a document URI.
     private fun docFileFromTreeOrDoc(uri: Uri): DocumentFile? {
         return try {
             when {
@@ -169,13 +165,11 @@ class MainActivity : NativeActivity() {
                     DocumentFile.fromTreeUri(this, uri)
                 }
                 DocumentsContract.isDocumentUri(this, uri) -> {
-                    // Convert doc URI to a tree URI rooted at the same document ID
                     val docId = DocumentsContract.getDocumentId(uri)
                     val tree = DocumentsContract.buildTreeDocumentUri(uri.authority ?: return null, docId)
                     DocumentFile.fromTreeUri(this, tree)
                 }
                 else -> {
-                    // Fallback (not a directory): single doc
                     DocumentFile.fromSingleUri(this, uri)
                 }
             }
@@ -184,7 +178,6 @@ class MainActivity : NativeActivity() {
         }
     }
 
-    // Returns encoded entries: "D|name|uri" for directories, "F|name|uri" for files.
     fun listChildren(treeUri: String, filters: Array<String>): Array<String> {
         val normFilters = filters.map { f ->
             val lower = f.lowercase()
@@ -212,7 +205,6 @@ class MainActivity : NativeActivity() {
         return out.toTypedArray()
     }
 
-    // Copies the given document to app's cache and returns the full filesystem path
     fun copyDocumentToCache(documentUri: String): String? {
         val uri = Uri.parse(documentUri)
         val df = DocumentFile.fromSingleUri(this, uri)
@@ -224,9 +216,7 @@ class MainActivity : NativeActivity() {
         } ?: return null
 
         val outFile = kotlin.run {
-            // Keep original extension to help downstream loaders
             val out = java.io.File(cacheDir, displayName)
-            // Ensure unique name
             var i = 1
             var candidate = out
             while (candidate.exists()) {
@@ -253,14 +243,11 @@ class MainActivity : NativeActivity() {
 
     // ------------------------ Export & Share helpers -------------------------
 
-    // Copies a file from a filesystem path (e.g., your app cache) into a SAF tree folder.
-    // Returns the destination document content URI as String, or null on failure.
     private fun copyPathToTree(treeUri: String, sourcePath: String, displayName: String, mime: String): String? {
         val uri = Uri.parse(treeUri)
         val root = docFileFromTreeOrDoc(uri) ?: return null
         if (!root.canWrite()) return null
 
-        // Ensure unique display name in the tree
         val finalName = kotlin.run {
             var base = displayName.substringBeforeLast('.', displayName)
             var ext = displayName.substringAfterLast('.', "")
@@ -295,13 +282,11 @@ class MainActivity : NativeActivity() {
         }
     }
 
-    // Convenience: copy from app cache into the Pictures SAF tree (if granted)
     fun copyCachePathToPictures(cachePath: String, displayName: String, mime: String): String? {
         val tree = getPicturesTreeUri() ?: return null
         return copyPathToTree(tree, cachePath, displayName, mime)
     }
 
-    // Launch Android share sheet for a content/document URI
     fun shareDocumentUri(uriString: String, mime: String, subject: String?) {
         val uri = Uri.parse(uriString)
         val intent = Intent(Intent.ACTION_SEND)
@@ -311,8 +296,39 @@ class MainActivity : NativeActivity() {
             intent.putExtra(Intent.EXTRA_SUBJECT, subject)
         }
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        // Attach ClipData to ensure the grant survives
         intent.clipData = ClipData.newUri(contentResolver, "Shared content", uri)
+        startActivity(Intent.createChooser(intent, "Share via"))
+    }
+
+    // NEW: Share a single cache file path using FileProvider (no SAF copy needed)
+    fun shareCacheFilePath(path: String, mime: String, subject: String?) {
+        val file = java.io.File(path)
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        val intent = Intent(Intent.ACTION_SEND)
+        intent.type = mime
+        intent.putExtra(Intent.EXTRA_STREAM, uri)
+        if (!subject.isNullOrEmpty()) intent.putExtra(Intent.EXTRA_SUBJECT, subject)
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        intent.clipData = ClipData.newUri(contentResolver, "Shared content", uri)
+        startActivity(Intent.createChooser(intent, "Share via"))
+    }
+
+    // NEW: Share multiple cache file paths using FileProvider
+    fun shareCacheFilePaths(paths: Array<String>, mime: String, subject: String?) {
+        val uris = ArrayList<Uri>(paths.size)
+        val clip = ClipData.newPlainText("", "")
+        for (p in paths) {
+            val file = java.io.File(p)
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            uris.add(uri)
+            clip.addItem(ClipData.Item(uri))
+        }
+        val intent = Intent(Intent.ACTION_SEND_MULTIPLE)
+        intent.type = mime
+        intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+        if (!subject.isNullOrEmpty()) intent.putExtra(Intent.EXTRA_SUBJECT, subject)
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        intent.clipData = clip
         startActivity(Intent.createChooser(intent, "Share via"))
     }
 }
