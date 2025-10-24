@@ -9,6 +9,7 @@
 #include "imgui.h"
 #include "imgui_impl_android.h"
 #include "imgui_impl_opengl3.h"
+#include <algorithm>
 #include <android/log.h>
 #include <android_native_app_glue.h>
 #include <android/asset_manager.h>
@@ -893,15 +894,15 @@ void MainLoopStep()
     // File dialogs (position near top-left)
     if (show_stl_openfile) {
         ImGui::SetNextWindowPos(ImVec2(left, top), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(560, 700), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(std::min(usable_w, 560.0f), std::min(content_h, 700.0f)), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowFocus();
         auto result = stl_openfile_dialog.show(show_stl_openfile);
         if (result == openfile::FileSelected)
             options->stlpath = stl_openfile_dialog.selecteditem.string();
     }
     if (show_texture_openfile) {
-        ImGui::SetNextWindowPos(ImVec2(40, 90), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(560, 700), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(left, top), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(std::min(usable_w, 560.0f), std::min(content_h, 700.0f)), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowFocus();
         auto result = texture_openfile_dialog.show(show_texture_openfile);
         if (result == openfile::FileSelected)
