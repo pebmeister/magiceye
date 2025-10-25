@@ -35,8 +35,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(FetchContent)
 
 # Options to control dependency resolution behavior
-option(MAGIC_EYE_DEPS_LOCK "Use pinned known-good versions for all dependencies" OFF)
-option(MAGIC_EYE_DEPS_REFRESH "Re-query GitHub for latest tags even if cached" OFF)
+option(MAGIC_EYE_DEPS_LOCK "Use pinned known-good versions for all dependencies" ON)
+option(MAGIC_EYE_DEPS_REFRESH "Re-query GitHub for latest tags even if cached" ON)
 
 # Find OpenGL for all platforms
 find_package(OpenGL REQUIRED)

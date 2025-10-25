@@ -2,6 +2,8 @@
 // Dear ImGui + GLFW + OpenGL3
 #define GLM_ENABLE_EXPERIMENTAL
 
+#pragma warning (disable:4005)
+
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
@@ -128,7 +130,8 @@ int main(int, char**)
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
     auto monitor = glfwGetPrimaryMonitor();
-    float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(monitor);
+    float main_scale = 1.0f;
+    // float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(monitor);
     int xpos, ypos, width, height;
     glfwGetMonitorWorkarea(monitor, &xpos, &ypos, &width, &height);
 
@@ -534,7 +537,7 @@ static void DrawViewport(bool* open, bool has_result, GLuint tex_sirds, GLuint t
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (avail.y - sz.y) * 0.5f);
         GLuint t = (*tab_idx == 0 ? tex_sirds : tex_depth);
         if (t)
-            ImGui::Image((void*)(intptr_t)t, sz);
+            ImGui::Image((ImTextureID)t, sz);
     }
     ImGui::EndChild();
 
